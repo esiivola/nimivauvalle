@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="fi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nimihaku</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.0/dist/nouislider.min.css" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="branding">
+        <!--<p class="eyebrow"></p>-->
+        <h1 class="hero-title">Nimi vauvalle</h1>
+        <p class="hero-subtitle">Sivu auttaa sinua löytämään kaikista sopivimman nimen uudelle perheenjäsenellesi.</p>
+      </div>
+      <div class="ad-slot ad-top" aria-label="Main ad placeholder">Mainospaikka</div>
+    </header>
+
+    <main class="layout">
+      <section class="filters" aria-labelledby="filters-title">
+        <h2 id="filters-title">Millaista nimeä etsit?</h2>
+        <form id="filter-form">
+          <div class="filter-block">
+            <h3>Perustiedot</h3>
+            <div class="block-grid">
+              <fieldset class="gender-field">
+                <legend>Sukupuoli</legend>
+                <label><input type="checkbox" name="gender" value="female" checked /> Tyttö</label>
+                <label><input type="checkbox" name="gender" value="male" checked /> Poika</label>
+                <label><input type="checkbox" name="gender" value="unisex" checked /> Sukupuolineutraalit nimet</label>
+              </fieldset>
+              <label class="surname-field">
+                Anna sukunimi sopivan etunimen suosittelua varten
+                <input type="text" id="surname-input" name="surname" placeholder="Esim. Korhonen" autocomplete="off" />
+                <span class="hint">
+                  Sukunimeä ei tallenneta mihinkään. Sivusto osaa suositella etunimiä ainoastaan sukunimille, joilla on vähintään 20 nimenhaltijaa.  
+                  <button type="button" class="link-button" id="edit-weight-button">Säädä suosittelualgoritmia</button>
+                </span>
+                <div id="surname-analysis" class="hint surname-analysis"></div>
+              </label>
+            </div>
+          </div>
+
+          <details id="group-filter-panel" open>
+            <summary>Nimen ominaisuudet</summary>
+            <p class="hint">Rajoita nimiä esimerkiksi vain perinteisiin, luontoteemaisiin tai tällä hetkellä suosittuihin nimiin.</p>
+            <div id="group-filters"></div>
+            <button class="ghost" type="button" data-action="add-group">+ Lisää rajaus</button>
+          </details>
+
+          <details id="phonetic-filter-panel">
+            <summary>Nimen ääntäminen</summary>
+            <p class="hint">Rajoita nimiä esimerkiksi vain pehmeän kuuloisiin nimiin tai sellaisiin nimiin, joissa ei ole voimakkaita r-äänteitä.</p>
+            <div id="phonetic-filters"></div>
+            <button class="ghost" type="button" data-action="add-phonetic">+ Lisää rajaus</button>
+          </details>
+
+          <details id="range-filter-panel">
+            <summary>Kirjain- ja pituusrajat</summary>
+            <div class="letter-grid">
+              <label>
+                Nimen tulee sisältää
+                <input type="text" id="letters-include" placeholder="Esim. ar" autocomplete="off" />
+                <span class="hint">Kirjoita merkit, jotka nimessä täytyy esiintyä.</span>
+              </label>
+              <label>
+                Nimen ei tule sisältää
+                <input type="text" id="letters-exclude" placeholder="Esim. zxq-" autocomplete="off" />
+                <span class="hint">Kirjoita merkit, joita nimessä ei saa olla.</span>
+              </label>
+            </div>
+            <div class="range-grid">
+              <div class="range-field">
+                <div class="range-header">
+                  <span>Merkkien määrä</span>
+                  <span id="letters-range-label" class="range-value"></span>
+                </div>
+                <div class="dual-slider" id="letters-slider"></div>
+              </div>
+            </div>
+          </details>
+
+          <details id="popularity-filter-panel">
+            <summary>Nimen suosio</summary>
+            <p class="hint">Suodata esimerkiksi suosittuja nimiä, suosion huipulla olevia tai ikivihreitä nimiä.</p>
+            <div id="popularity-filters"></div>
+            <button class="ghost" type="button" data-action="add-popularity">+ Lisää suosiorajaus</button>
+            <div class="range-field">
+              <div class="range-header">
+                <span>Nimenhaltijoiden määrä</span>
+                <span id="population-range-label" class="range-value"></span>
+              </div>
+              <div class="number-range">
+                <label>
+                  Minimi
+                  <input type="text" id="population-min" inputmode="numeric" placeholder="0" />
+                </label>
+                <label>
+                  Maksimi
+                  <input type="text" id="population-max" inputmode="numeric" placeholder="45 000" />
+                </label>
+              </div>
+            </div>
+          </details>
+
+          <div class="filter-actions">
+            <div class="filter-sources" aria-live="polite">
+              <p class="hint">
+                Datan lähteet:
+                <a href="https://dvv.fi/nimipalvelu" target="_blank" rel="noopener">DVV</a>, <a href="https://fi.wikipedia.org/wiki/Wikipedia:Etusivu" target="_blank" rel="noopener">Wikipedia</a> (listat ja nimien tiedot) 
+              </p>
+            </div>
+            <button class="primary" type="button" id="apply-filters">Hae nimet</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="results" aria-live="polite">
+        <div class="ad-slot ad-inline-top" aria-label="Results ad placeholder">Mainospaikka</div>
+        <div class="results-ordering">
+          <label class="sort-label">
+            Järjestä
+            <select id="sort-key"></select>
+          </label>
+          <button class="ghost" type="button" id="toggle-sort">↓</button>
+        </div>
+        <div class="results-bar">
+          <div>
+            <strong id="result-count">Ladataan nimiä…</strong>
+            <span id="match-context"></span>
+            <div id="active-filters" class="filter-summary"></div>
+          </div>
+          <div class="pagination-controls">
+            <button type="button" id="prev-page" disabled>←</button>
+            <button type="button" id="next-page" disabled>→</button>
+          </div>
+        </div>
+        <div id="results-list" class="name-list" aria-live="polite"></div>
+        <div class="pagination-controls bottom">
+          <button type="button" id="prev-page-bottom" disabled>←</button>
+          <button type="button" id="next-page-bottom" disabled>→</button>
+        </div>
+      </section>
+      <aside class="ad-rail" aria-label="Side ad placeholder">
+        <div class="ad-slot ad-rail-slot">Mainospaikka</div>
+      </aside>
+    </main>
+
+    <template id="phonetic-filter-template">
+      <div class="filter-row" data-id="">
+        <select class="feature-select"></select>
+        <select class="mode-select">
+          <option value="include">Nimessä täytyy olla tämä piirre</option>
+          <option value="exclude">Poista nimet, joissa on tämä piirre</option>
+          <option value="min">Vähintään taso</option>
+          <option value="max">Enintään taso</option>
+        </select>
+        <select class="grade-select"></select>
+        <button type="button" class="ghost small" data-action="remove">Poista</button>
+      </div>
+    </template>
+
+    <template id="group-filter-template">
+      <div class="filter-row" data-id="">
+        <select class="group-select"></select>
+        <select class="group-mode-select">
+          <option value="include">Vain tällaiset nimet</option>
+          <option value="exclude">Poista tällaiset nimet</option>
+        </select>
+        <button type="button" class="ghost small" data-action="remove">Poista</button>
+      </div>
+    </template>
+
+    <template id="popularity-filter-template">
+      <div class="filter-row" data-id="">
+        <select class="popularity-select"></select>
+        <select class="popularity-mode-select">
+          <option value="include">Vain tällaiset nimet</option>
+          <option value="exclude">Poista tällaiset nimet</option>
+        </select>
+        <button type="button" class="ghost small" data-action="remove">Poista</button>
+      </div>
+    </template>
+
+    <div id="weight-editor" class="modal" role="dialog" aria-modal="true" aria-labelledby="weight-editor-title" hidden>
+      <div class="modal-backdrop" data-action="dismiss-weight-editor"></div>
+      <div class="modal-panel">
+        <header class="modal-header">
+          <div>
+            <p class="eyebrow" id="weight-editor-eyebrow">Sukunimen painot</p>
+            <h2 id="weight-editor-title">Muokkaa pisteytyksen painoja</h2>
+          </div>
+          <button type="button" class="icon-button" data-action="dismiss-weight-editor" aria-label="Sulje">x</button>
+        </header>
+        <p id="weight-editor-description" class="hint"></p>
+        <div id="weight-editor-list" class="weight-editor-list"></div>
+        <div class="weight-editor-footer">
+          <div class="weight-editor-status">
+            <div id="weight-editor-total" class="weight-editor-total"></div>
+            <div id="weight-editor-remaining" class="weight-editor-remaining"></div>
+            <div id="weight-editor-error" class="weight-editor-error" role="alert"></div>
+          </div>
+          <div class="weight-editor-actions">
+            <button type="button" class="ghost" data-action="reset-weight-editor">Palauta oletukset</button>
+            <span class="weight-editor-actions-spacer"></span>
+            <button type="button" class="ghost" data-action="cancel-weight-editor">Peruuta</button>
+            <button type="button" class="primary" id="weight-editor-save" data-action="save-weight-editor" disabled>OK</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.0/dist/nouislider.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/wnumb@1.2.0/wNumb.min.js"></script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

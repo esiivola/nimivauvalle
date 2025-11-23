@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="fi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nimien yhteensopivuuden selitys</title>
+    <style>
+      body {
+        font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        max-width: 860px;
+        margin: 2rem auto;
+        padding: 0 1.5rem 3rem;
+        line-height: 1.6;
+        color: #1f2430;
+      }
+      h1 {
+        font-size: clamp(1.8rem, 4vw, 2.4rem);
+        margin-bottom: 0.75rem;
+      }
+      h2 {
+        margin-top: 2rem;
+        font-size: 1.35rem;
+      }
+      .card {
+        background: #f5f6fb;
+        border-radius: 1rem;
+        padding: 1.25rem;
+        margin-top: 1rem;
+        border: 1px solid #dadff0;
+      }
+      ul {
+        padding-left: 1.2rem;
+      }
+      li + li {
+        margin-top: 0.3rem;
+      }
+      .weights table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 0.75rem;
+      }
+      .weights th,
+      .weights td {
+        padding: 0.4rem 0.25rem;
+        border-bottom: 1px solid #e4e6f0;
+        text-align: left;
+      }
+      footer {
+        margin-top: 3rem;
+        font-size: 0.9rem;
+        color: #5b6074;
+      }
+      a {
+        color: #3555ff;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Miten etu- ja sukunimien yhteensopivuus lasketaan?</h1>
+    <p>
+      Yhteensopivuuspiste kertoo, kuinka luontevasti etu- ja sukunimi soivat yhdessä.
+      Laskenta ei vaadi taustatietoa fonetiikasta - alla on listattu jokainen rakennuspalikka selkokielisesti.
+    </p>
+
+    <div class="card">
+      <h2>1. Vokaalien harmonia ja avaruus</h2>
+      <ul>
+        <li>
+          <strong>Vokaalien sijainti</strong> - tarkistaa, suosivatko molemmat nimet samoja etu- tai takavokaaleja.
+          Jos toinen nimi on selvästi etuvokaalinen ja toinen takavokaalinen, piste laskee.
+        </li>
+        <li>
+          <strong>Vokaalien avaruus</strong> - vertailee äänteen korkeutta (avautuvat vs. sulkeutuvat vokaalit).
+          Kun avaruus on samankaltainen, nimet tuntuvat kuuluvan samaan rytmiin.
+        </li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>2. Konsonanttien tuntu ja sointi</h2>
+      <ul>
+        <li>
+          <strong>Pehmeys</strong> - laskee pehmeiden (m, n, l, r) ja kovien konsonanttien osuudet.
+          Tasapaino tarkoittaa, että etunimi ei kuulosta terävämmältä tai pehmeämmältä kuin sukunimi.
+        </li>
+        <li>
+          <strong>Sointisävy</strong> - ns. "valence" kertoo onko nimi kirkas vai karhea.
+          Lähellä toisiaan olevat sävyt tekevät yhdistelmästä tasapainoisen.
+        </li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>3. Rytmi ja tavutus</h2>
+      <ul>
+        <li>
+          <strong>Tavujen määrä</strong> - järjestelmä suosii yhdistelmiä, joissa tavuero on pieni tai
+          perusteltu (esim. lyhyt sukunimi + pidempi etunimi).
+        </li>
+        <li>
+          <strong>Allitteraatio</strong> - pieni bonus, jos nimet alkavat samalla äänteellä, mutta vaikutus on hallittu,
+          jotta lopputulos ei tunnu keinotekoiselta.
+        </li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>4. Kirjainryhmien siirtymät</h2>
+      <p>
+        Tilastollinen malli käy läpi tuhansien suomalaisten nimien kirjainryhmiä ja oppii, kuinka yleisiä
+        tietyt siirtymät ovat. Malli on sama kuin työkalu <code>letter_rules.json</code> -tiedostossa.
+      </p>
+      <ul>
+        <li>
+          <strong>Junction score</strong> - tarkistaa, kuinka todennäköistä on siirtyä etunimen viimeisestä
+          äännejoukosta sukunimen ensimmäiseen. Luonnollinen siirtymä, kuten vokaali → vokaali tai nasalinen → vokaali,
+          nostaa pistettä. Harvinainen siirtymä, kuten konsonanttiklusteri → uusi klusteri, laskee pistettä.
+        </li>
+        <li>
+          <strong>Alkuosien siirtymä</strong> - varmistaa, että molempien nimien alut sopivat samaan rytmiin.
+          Tämä huomioi esimerkiksi, alkavatko molemmat tai kumpikaan liian kovalla äänteellä.
+        </li>
+      </ul>
+    </div>
+
+    <div class="card weights">
+      <h2>5. Painotukset</h2>
+      <p>
+        Kaikki osapisteet skaalataan välille 0-1 ja yhdistetään painotetulla summalla.
+        Painot ovat muokattavissa (<code>schema.json</code>) ja oletuksena seuraavat:
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Ominaisuus</th>
+            <th>Paino</th>
+            <th>Selitys</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Vokaalien sijainti</td><td>0,25</td><td>Yhteensopiva etu-/takavokaalisuus</td></tr>
+          <tr><td>Vokaalien avaruus</td><td>0,25</td><td>Äänteiden avoimuus samaan suuntaan</td></tr>
+          <tr><td>Pehmeys</td><td>0,20</td><td>Konsonanttien tuntu - pehmeä vs. kova</td></tr>
+          <tr><td>Sointisävy (valence)</td><td>0,25</td><td>Kokonaisuuden kirkkaus tai tummuus</td></tr>
+          <tr><td>Rytmi</td><td>0,15</td><td>Tavueron sopivuus</td></tr>
+          <tr><td>Allitteraatio</td><td>0,03</td><td>Pieni bonus samasta alusta</td></tr>
+          <tr><td>Kirjainrajat</td><td>0,05</td><td>Vältetään töksähtävät lopetus→alku -parit</td></tr>
+          <tr><td>Tilastollinen rajasiirtymä</td><td>0,12</td><td>Perustuu oppimamme todennäköisyyksiin (etunimi loppu → sukunimi alku)</td></tr>
+          <tr><td>Tilastollinen alkupari</td><td>0,08</td><td>Varmistaa, että molempien alkusävelet sopivat yhteen</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>6. Tulkinta</h2>
+      <ul>
+        <li>80-100 %: nimet soivat erityisen tasapainoisesti, eivät töksähdä ja jakavat saman "fiiliksen".</li>
+        <li>60-80 %: yhdistelmä toimii hyvin, mutta jokin pieni piirre (esim. pituus) erottuu.</li>
+        <li>Alle 60 %: kokonaisuus voi kuulostaa kulmikkaalta - kokeile vaihtaa kirjaimia tai pituutta.</li>
+      </ul>
+      <p>
+        Kaikki laskenta tehdään paikallisesti selaimessa. Voit säätää painotuksia tai lisätä uusia ominaisuuksia
+        muokkaamalla JSON-skeemaa ja päivittämällä sivun.
+      </p>
+    </div>
+
+    <footer>
+      Päivitetty: <time datetime="2025-11-17">17.11.2025</time> · Tämä sivu on tarkoitettu yleiskieliseksi
+      referenssiksi siitä, miten nimien yhteensopivuuden laskenta toimii.
+    </footer>
+  </body>
+</html>
