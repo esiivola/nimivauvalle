@@ -15,7 +15,7 @@ const translations = {
     },
     results: (start, end, total) => `Näytetään ${start}-${end} / ${total} nimeä`,
     noResults: 'Valituilla rajauksilla ei löytynyt yhtään nimeä.',
-    match: (surname) => surname ? `Vertailu sukunimelle “${surname}”` : 'Sukunimiyhteensopivuus pois käytöstä',
+    match: (surname) => surname ? `Vauvan sukunimi on “${surname}”` : 'Sukunimiyhteensopivuus pois käytöstä',
     missingSurname: (surname) => `Sukunimeä “${surname}” ei löytynyt aineistosta - vertailu ohitettiin.`,
     matchLabel: 'Sukunimi-osuvuus',
     grade: (label) => `Taso: ${label}`,
@@ -40,7 +40,7 @@ const translations = {
     surnameUsage: (count, rank) => `Sukunimeä käyttää ${count} henkilöä ja se on ${rank}:s yleisin.`,
     firstNameAnalysisTitle: 'Etunimen äänneprofiili',
     nameDayLabel: 'Nimipäivä',
-    wikiTitle: 'Tietoa Wikipediasta',
+    wikiTitle: 'Tietoa nimestä',
     wikiLoading: 'Haetaan Wikipedia-tiivistelmää…',
     wikiUnavailable: 'Wikipedia-artikkelia ei löytynyt',
     detailsLoading: 'Haetaan nimen tarkempia tietoja…',
@@ -98,7 +98,8 @@ const state = {
   groupFilters: [],
   sortKey: 'match',
   sortDir: 'desc',
-  page: 0,
+  visibleCount: PAGE_SIZE,
+  showFiltered: true,
   matchInfo: { surnameEntry: null, missingSurname: false },
   weightOverrides: null
 };
@@ -110,8 +111,11 @@ let surnameMap = new Map();
 let surnameRankMap = new Map();
 let phoneticMeta = new Map();
 let groupMeta = new Map();
+let groupFilterKeys = [];
 let gradeMeta = [];
 let currentResults = [];
+let filteredOutResults = [];
+let orderedResults = [];
 let transitionConfig = null;
 let detailBasePath = 'data/details';
 let detailBucketMap = {};
@@ -119,12 +123,19 @@ const detailCache = new Map();
 const LETTER_LIMITS = { min: 1, max: 20 };
 const POPULATION_LIMITS = { min: 0, max: 45000 };
 let lettersRangeControl = null;
+const FAVORITES_KEY = 'favoriteNames';
+let favorites = new Set();
 let surnameInputTimer = null;
+let autoApplyTimer = null;
 let weightPercentBudget = 1;
 let weightEditorControls = null;
 let weightEditorInputs = [];
 let defaultMatchingWeights = null;
 const WEIGHT_SUM_TOLERANCE = 0.05;
+const FILTERED_BATCH_SIZE = 120;
+const DETAIL_AD_FREQUENCY = 3;
+let detailAdCounter = 0;
+let filterFeatureMeta = [];
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -151,8 +162,8 @@ function setPanelOpen(panelId, shouldOpen) {
 }
 
 function updateFilterPanels() {
-  setPanelOpen('group-filter-panel', state.groupFilters.length > 0);
-  setPanelOpen('phonetic-filter-panel', state.phoneticFilters.length > 0);
+  const hasTraitFilters = state.groupFilters.length > 0 || state.phoneticFilters.length > 0;
+  setPanelOpen('desired-filter-panel', hasTraitFilters);
   setPanelOpen('range-filter-panel', isRangeFilterActive());
   setPanelOpen('popularity-filter-panel', state.popularityFilters.length > 0);
 }
@@ -291,10 +302,19 @@ function buildMetaMaps() {
     (group) => !String(group.key || '').startsWith('nameday_calendar_')
   );
   groupMeta = new Map(filteredGroups.map((g) => [g.key, g]));
+  groupFilterKeys = filteredGroups
+    .filter(
+      (group) =>
+        !String(group.key || '').startsWith('popular_') &&
+        !String(group.key || '').startsWith('trend_') &&
+        group.key !== 'evergreen'
+    )
+    .map((g) => g.key);
   gradeMeta = data.schema.intensityGrades || [];
-  surnameMap = new Map(data.surnames.map((entry) => [entry.name.toLowerCase(), entry]));
+  const cleanSurnames = (data.surnames || []).filter((entry) => (entry.name || '').trim().length);
+  surnameMap = new Map(cleanSurnames.map((entry) => [entry.name.toLowerCase(), entry]));
   surnameRankMap = new Map();
-  const rankedSurnames = [...data.surnames]
+  const rankedSurnames = [...cleanSurnames]
     .filter((entry) => Number.isFinite(Number(entry.popularity)))
     .sort((a, b) => Number(b.popularity || 0) - Number(a.popularity || 0));
   rankedSurnames.forEach((entry, index) => {
@@ -303,6 +323,7 @@ function buildMetaMaps() {
   transitionConfig = data.schema.matching?.transitions || null;
   detailBasePath = data.schema.details?.basePath || 'data/details';
   detailBucketMap = data.schema.details?.buckets || {};
+  filterFeatureMeta = data.schema.filterFeatures || [];
 }
 
 function getTransitionProbability(fromGroup, toGroup) {
@@ -388,6 +409,37 @@ function normalizeLetterFilter(value) {
     .replace(/[^a-zåäöæøœšžẞ\u00c0-\u017f\-]/g, '');
 }
 
+function loadFavoritesFromStorage() {
+  try {
+    const raw = localStorage.getItem(FAVORITES_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(arr.filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveFavoritesToStorage(set) {
+  const arr = Array.from(set);
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(arr));
+}
+
+function isFavoriteName(name) {
+  return favorites.has(name);
+}
+
+function toggleFavoriteName(entry) {
+  if (!entry?.name) return;
+  const key = entry.name;
+  if (favorites.has(key)) {
+    favorites.delete(key);
+  } else {
+    favorites.add(key);
+  }
+  saveFavoritesToStorage(favorites);
+}
+
 function normalizeRangeValues(minValue, maxValue, limits) {
   let min = Number(minValue);
   let max = Number(maxValue);
@@ -435,6 +487,7 @@ function initDualSliderControl({ sliderId, labelId, limits, start }) {
     labelEl.textContent = `${values[0]} - ${values[1]}`;
   };
   sliderEl.noUiSlider.on('update', (values) => updateLabel(values));
+  sliderEl.noUiSlider.on('change', () => scheduleApplyFilters());
   updateLabel(initial);
 
   return {
@@ -521,7 +574,7 @@ function restoreFromQuery() {
     const normalizedMode = mode && mode !== 'undefined' ? mode : 'include';
     return {
       id: nextGroupFilterId(),
-      group: group || (data.schema.groupFeatures[0]?.key ?? ''),
+      group: groupFilterKeys.includes(group) ? group : groupFilterKeys[0] || '',
       mode: normalizedMode
     };
   });
@@ -581,6 +634,9 @@ function attachPopulationInputEvents() {
     if (!Number.isFinite(numeric)) numeric = 0;
     numeric = Math.max(POPULATION_LIMITS.min, Math.min(POPULATION_LIMITS.max, numeric));
     target.value = formatNumberWithSpaces(numeric);
+    if (event.type === 'blur') {
+      scheduleApplyFilters();
+    }
   };
   if (minInput) {
     minInput.addEventListener('input', formatHandler);
@@ -604,191 +660,214 @@ function syncFormWithState() {
   $('#sort-key').value = state.sortKey;
   $('#toggle-sort').textContent = state.sortDir === 'asc' ? '↑' : '↓';
   updateSortOptionTooltips();
-  renderPhoneticFilters();
-  renderGroupFilters();
+  renderFeatureFilters();
   renderPopularityFilters();
   updateFilterPanels();
 }
 
-function renderPhoneticFilters() {
-  const container = $('#phonetic-filters');
+function scheduleApplyFilters(skipFormSync = false, delay = 250) {
+  clearTimeout(autoApplyTimer);
+  autoApplyTimer = setTimeout(() => applyFilters(skipFormSync), delay);
+}
+
+function renderFeatureFilters() {
+  const container = $('#feature-filters');
+  if (!container) return;
   container.innerHTML = '';
-  if (!state.phoneticFilters.length) {
-    container.innerHTML = '<p class="hint">Ei aktiivisia rajauksia.</p>';
+  if (!filterFeatureMeta.length) {
+    container.innerHTML = '<p class="hint">Ei rajattavia ominaisuuksia.</p>';
     updateFilterPanels();
     return;
   }
-  const template = $('#phonetic-filter-template');
-  state.phoneticFilters.forEach((filter) => {
-    if (!phoneticMeta.has(filter.feature)) {
-      filter.feature = data.schema.phoneticFeatures[0]?.key ?? '';
-    }
-    const fragment = template.content.cloneNode(true);
-    const row = fragment.querySelector('.filter-row');
-    row.dataset.id = filter.id;
-
-    const featureSelect = fragment.querySelector('.feature-select');
-    const featureDesc = document.createElement('p');
-    featureDesc.className = 'filter-desc';
-    phoneticMeta.forEach((meta, key) => {
-      const option = document.createElement('option');
-      option.value = key;
-      option.textContent = getFeatureLabel(meta);
-      option.title = getFeatureDescriptionByMeta(meta);
-      featureSelect.appendChild(option);
+  const toggleStates = (current) => {
+    const order = ['none', 'include', 'exclude'];
+    const idx = order.indexOf(current);
+    return order[(idx + 1) % order.length];
+  };
+  const grid = document.createElement('div');
+  grid.className = 'filter-columns';
+  filterFeatureMeta.forEach((meta) => {
+    const key = meta.key;
+    const type = meta.filterType;
+    let existing =
+      type === 'group'
+        ? state.groupFilters.find((f) => f.group === key)
+        : state.phoneticFilters.find((f) => f.feature === key);
+    const currentMode = existing?.mode || 'none';
+    const row = document.createElement('div');
+    row.className = 'filter-row';
+    const label = document.createElement('div');
+    label.textContent =
+      type === 'group'
+        ? getGroupLabel(groupMeta.get(key)) || meta.label
+        : getFeatureLabel(phoneticMeta.get(key)) || meta.label;
+    label.className = 'filter-label-text';
+    row.appendChild(label);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ghost small tri-toggle';
+    const setState = (mode) => {
+      button.dataset.state = mode;
+      button.textContent = mode === 'include' ? '+' : mode === 'exclude' ? '–' : '○';
+    };
+    setState(currentMode);
+    button.title =
+      type === 'group'
+        ? getGroupDescription(key) || meta.description
+        : getFeatureDescriptionByMeta(phoneticMeta.get(key)) || meta.description;
+    button.addEventListener('click', () => {
+      const next = toggleStates(button.dataset.state || 'none');
+      if (next === 'none') {
+        if (type === 'group') {
+          state.groupFilters = state.groupFilters.filter((f) => f.group !== key);
+          existing = null;
+        } else {
+          state.phoneticFilters = state.phoneticFilters.filter((f) => f.feature !== key);
+          existing = null;
+        }
+      } else if (existing) {
+        existing.mode = next;
+      } else if (type === 'group') {
+        existing = { id: nextGroupFilterId(), group: key, mode: next };
+        state.groupFilters.push(existing);
+      } else {
+        existing = { id: nextFilterId(), feature: key, mode: next, grade: 1 };
+        state.phoneticFilters.push(existing);
+      }
+      setState(next);
+      scheduleApplyFilters(true);
     });
-    featureSelect.value = filter.feature;
-    featureSelect.title = getFeatureDescription(filter.feature);
-    featureDesc.textContent = getFeatureDescription(filter.feature);
-    featureSelect.addEventListener('change', (evt) => {
-      filter.feature = evt.target.value;
-      featureSelect.title = getFeatureDescription(filter.feature);
-      featureDesc.textContent = getFeatureDescription(filter.feature);
-    });
-
-    const modeSelect = fragment.querySelector('.mode-select');
-    modeSelect.value = filter.mode;
-    modeSelect.addEventListener('change', (evt) => {
-      filter.mode = evt.target.value;
-      updateGradeVisibility(row, filter);
-    });
-
-    const gradeSelect = fragment.querySelector('.grade-select');
-    if (gradeMeta.length) {
-      gradeMeta.forEach((grade) => {
-        const option = document.createElement('option');
-        option.value = grade.value;
-        option.textContent = grade.fi;
-        gradeSelect.appendChild(option);
-      });
-      gradeSelect.value = filter.grade ?? 1;
-      gradeSelect.addEventListener('change', (evt) => {
-        filter.grade = Number(evt.target.value);
-      });
-    } else {
-      gradeSelect.hidden = true;
-      gradeSelect.disabled = true;
-    }
-    updateGradeVisibility(row, filter);
-
-    fragment.querySelector('[data-action="remove"]').addEventListener('click', () => {
-      state.phoneticFilters = state.phoneticFilters.filter((item) => item.id !== filter.id);
-      renderPhoneticFilters();
-    });
-
-    row.appendChild(featureDesc);
-    container.appendChild(fragment);
+    row.appendChild(button);
+    const desc = document.createElement('p');
+    desc.className = 'filter-desc';
+    desc.textContent =
+      type === 'group'
+        ? getGroupDescription(key) || meta.description || ''
+        : getFeatureDescriptionByMeta(phoneticMeta.get(key)) || meta.description || '';
+    row.appendChild(desc);
+    grid.appendChild(row);
   });
+  container.appendChild(grid);
   updateFilterPanels();
 }
 
-function updateGradeVisibility(row, filter) {
-  const gradeSelect = row.querySelector('.grade-select');
-  if (!gradeSelect || !gradeSelect.options.length) {
-    if (gradeSelect) {
-      gradeSelect.hidden = true;
-      gradeSelect.disabled = true;
+function getPopularityOptions(prefix) {
+  const options = [];
+  groupMeta.forEach((meta, key) => {
+    if (key.startsWith(prefix)) {
+      options.push(key);
     }
+  });
+  options.sort((a, b) => parsePeriodKey(b) - parsePeriodKey(a));
+  return options;
+}
+
+function findPopularityByPrefix(prefix) {
+  return state.popularityFilters.find((f) => f.group.startsWith(prefix));
+}
+
+function setPopularitySelection(prefix, groupKey, mode) {
+  state.popularityFilters = state.popularityFilters.filter((f) => !f.group.startsWith(prefix));
+  if (!groupKey || mode === 'none') {
     return;
   }
-  if (['min', 'max'].includes(filter.mode)) {
-    gradeSelect.hidden = false;
-    gradeSelect.disabled = false;
-  } else {
-    gradeSelect.hidden = true;
-    gradeSelect.disabled = true;
-  }
+  state.popularityFilters.push({ id: nextGroupFilterId(), group: groupKey, mode });
+}
+
+function cycleTriState(current) {
+  const order = ['none', 'include', 'exclude'];
+  const idx = order.indexOf(current);
+  return order[(idx + 1) % order.length];
+}
+
+function renderPhoneticFilters() {
+  renderFeatureFilters();
 }
 
 function renderGroupFilters() {
-  const container = $('#group-filters');
-  container.innerHTML = '';
-  if (!state.groupFilters.length) {
-    container.innerHTML = '<p class="hint">Ei aktiivisia rajauksia.</p>';
-    updateFilterPanels();
-    return;
-  }
-  const template = $('#group-filter-template');
-  state.groupFilters.forEach((filter) => {
-    if (!groupMeta.has(filter.group)) {
-      filter.group = data.schema.groupFeatures[0]?.key ?? '';
-    }
-    const fragment = template.content.cloneNode(true);
-    const row = fragment.querySelector('.filter-row');
-    row.dataset.id = filter.id;
-    const select = fragment.querySelector('.group-select');
-    const desc = document.createElement('p');
-    desc.className = 'filter-desc';
-    groupMeta.forEach((meta, key) => {
-      const option = document.createElement('option');
-      option.value = key;
-      option.textContent = getGroupLabel(meta);
-      select.appendChild(option);
-    });
-    select.value = filter.group;
-    desc.textContent = getGroupDescription(filter.group);
-    select.addEventListener('change', (evt) => {
-      filter.group = evt.target.value;
-      desc.textContent = getGroupDescription(filter.group);
-    });
-    const modeSelect = fragment.querySelector('.group-mode-select');
-    modeSelect.value = filter.mode;
-    modeSelect.addEventListener('change', (evt) => {
-      filter.mode = evt.target.value;
-    });
-    fragment.querySelector('[data-action="remove"]').addEventListener('click', () => {
-      state.groupFilters = state.groupFilters.filter((item) => item.id !== filter.id);
-      renderGroupFilters();
-    });
-    row.appendChild(desc);
-    container.appendChild(fragment);
-  });
-  updateFilterPanels();
+  renderFeatureFilters();
 }
 
 function renderPopularityFilters() {
   const container = $('#popularity-filters');
+  if (!container) return;
   container.innerHTML = '';
-  const popularityKeys = getPopularityKeys();
-  if (!state.popularityFilters.length) {
-    container.innerHTML = '<p class="hint">Ei aktiivisia rajauksia.</p>';
-    updateFilterPanels();
-    return;
-  }
-  const template = $('#popularity-filter-template');
-  state.popularityFilters.forEach((filter) => {
-    if (!popularityKeys.includes(filter.group)) {
-      filter.group = popularityKeys[0] || '';
+  const rows = [
+    {
+      label: 'Suosion huipulla',
+      prefix: 'trend_',
+      desc: 'Valitse jakso, jolla nimi on ollut huipulla.'
+    },
+    {
+      label: 'Kasvattanut suosiota',
+      prefix: 'growth_',
+      desc: 'Valitse jakso, jossa suosio on kasvanut edelliseen nähden.'
+    },
+    {
+      label: 'Suosittu',
+      prefix: 'popular_',
+      desc: 'Valitse ajanjaksojen Top 100 -nimet.'
     }
-    const fragment = template.content.cloneNode(true);
-    const row = fragment.querySelector('.filter-row');
-    row.dataset.id = filter.id;
-    const select = fragment.querySelector('.popularity-select');
-    popularityKeys.forEach((key) => {
+  ];
+  const createSelect = (prefix) => {
+    const select = document.createElement('select');
+    const options = getPopularityOptions(prefix);
+    if (!options.length) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'Ei valintoja';
+      select.appendChild(opt);
+      return select;
+    }
+    options.forEach((key) => {
       const option = document.createElement('option');
       option.value = key;
-      option.textContent = formatPopularityLabel(key);
+      option.textContent = getPeriodLabel(key);
       select.appendChild(option);
     });
-    select.value = filter.group;
+    return select;
+  };
+  rows.forEach((rowConfig) => {
+    const row = document.createElement('div');
+    row.className = 'popularity-row';
+    const labelEl = document.createElement('div');
+    labelEl.textContent = rowConfig.label;
+    labelEl.className = 'filter-label-text';
+    row.appendChild(labelEl);
+    const select = createSelect(rowConfig.prefix);
+    row.appendChild(select);
+    const tri = document.createElement('button');
+    tri.type = 'button';
+    tri.className = 'ghost small tri-toggle';
+    const current = findPopularityByPrefix(rowConfig.prefix);
+    if (current) {
+      select.value = current.group;
+    }
+    const setState = (mode) => {
+      tri.dataset.state = mode;
+      tri.textContent = mode === 'include' ? '+' : mode === 'exclude' ? '–' : '○';
+    };
+    setState(current ? current.mode : 'none');
+    tri.addEventListener('click', () => {
+      const next = cycleTriState(tri.dataset.state || 'none');
+      setPopularitySelection(rowConfig.prefix, select.value, next);
+      setState(next);
+      scheduleApplyFilters(true);
+    });
+    select.addEventListener('change', () => {
+      const mode = tri.dataset.state || 'none';
+      setPopularitySelection(rowConfig.prefix, select.value, mode);
+      scheduleApplyFilters(true);
+    });
+    row.appendChild(tri);
+    container.appendChild(row);
     const desc = document.createElement('p');
     desc.className = 'filter-desc';
-    desc.textContent = getGroupDescription(filter.group);
-    select.addEventListener('change', (evt) => {
-      filter.group = evt.target.value;
-      desc.textContent = getGroupDescription(filter.group);
-    });
-    const modeSelect = fragment.querySelector('.popularity-mode-select');
-    modeSelect.value = filter.mode;
-    modeSelect.addEventListener('change', (evt) => {
-      filter.mode = evt.target.value;
-    });
-    fragment.querySelector('[data-action="remove"]').addEventListener('click', () => {
-      state.popularityFilters = state.popularityFilters.filter((item) => item.id !== filter.id);
-      renderPopularityFilters();
-    });
-    row.appendChild(desc);
-    container.appendChild(fragment);
+    desc.textContent = rowConfig.desc;
+    const descWrap = document.createElement('div');
+    descWrap.className = 'popularity-row-desc';
+    descWrap.appendChild(desc);
+    container.appendChild(descWrap);
   });
   updateFilterPanels();
 }
@@ -799,6 +878,7 @@ function addPopularityFilter() {
   const firstKey = keys[0];
   state.popularityFilters.push({ id: nextGroupFilterId(), group: firstKey, mode: 'include' });
   renderPopularityFilters();
+  scheduleApplyFilters(true);
 }
 
 function addPhoneticFilter() {
@@ -806,13 +886,15 @@ function addPhoneticFilter() {
   if (!firstKey) return;
   state.phoneticFilters.push({ id: nextFilterId(), feature: firstKey, mode: 'include', grade: 1 });
   renderPhoneticFilters();
+  scheduleApplyFilters(true);
 }
 
 function addGroupFilter() {
-  const firstKey = data.schema.groupFeatures[0]?.key;
+  const firstKey = groupFilterKeys[0];
   if (!firstKey) return;
   state.groupFilters.push({ id: nextGroupFilterId(), group: firstKey, mode: 'include' });
   renderGroupFilters();
+  scheduleApplyFilters(true);
 }
 
 function updateStateFromForm() {
@@ -839,26 +921,20 @@ function updateStateFromForm() {
   updateFilterPanels();
 }
 
-function applyFilters() {
-  updateStateFromForm();
-  state.page = 0;
+function applyFilters(skipFormSync = false) {
+  if (!skipFormSync) {
+    updateStateFromForm();
+  }
+  state.visibleCount = PAGE_SIZE;
   const surnameKey = state.surname.toLowerCase();
   const surnameEntry = surnameKey ? surnameMap.get(surnameKey) : null;
   const missingSurname = Boolean(state.surname && !surnameEntry);
   const surnameCount = surnameEntry ? Number(surnameEntry.popularity) || 0 : 0;
-  updateSurnameAnalysis(surnameEntry, missingSurname);
-  const filtered = data.names.filter((entry) => {
-    if (!state.genders.has(entry.gender) && entry.gender !== 'unknown') return false;
-    if (!passesLetterFilters(entry)) return false;
-    if (!passesLengthFilters(entry)) return false;
-    if (!passesPopulationFilter(entry)) return false;
-    if (!passesGroupFilters(entry)) return false;
-    if (!passesPopularityFilters(entry)) return false;
-    if (!passesPhoneticFilters(entry)) return false;
-    return true;
-  });
+  const filtered = [];
+  filteredOutResults = [];
 
-  filtered.forEach((entry) => {
+  data.names.forEach((entry) => {
+    const reasons = collectFilterFailures(entry);
     entry._match = surnameEntry ? computeMatchScore(entry, surnameEntry) : null;
     if (surnameCount && entry.populationShare) {
       const comboValue = surnameCount * entry.populationShare;
@@ -866,9 +942,18 @@ function applyFilters() {
     } else {
       entry._comboEstimate = null;
     }
+    entry._filteredReasons = reasons;
+    if (!reasons.length) {
+      filtered.push(entry);
+    } else {
+      filteredOutResults.push(entry);
+    }
   });
 
   sortResults(filtered);
+  sortResults(filteredOutResults);
+  orderedResults = [...filtered, ...filteredOutResults];
+  sortResults(orderedResults);
   currentResults = filtered;
   state.matchInfo = { surnameEntry, missingSurname };
   renderResults();
@@ -876,25 +961,11 @@ function applyFilters() {
 }
 
 function passesGroupFilters(entry) {
-  if (!state.groupFilters.length) return true;
-  return state.groupFilters.every((filter) => {
-    const hasGroup = entry.groups.includes(filter.group);
-    if (filter.mode === 'include') {
-      return hasGroup;
-    }
-    return !hasGroup;
-  });
+  return getGroupFilterReasons(entry).length === 0;
 }
 
 function passesPopularityFilters(entry) {
-  if (!state.popularityFilters.length) return true;
-  return state.popularityFilters.every((filter) => {
-    const hasGroup = entry.groups.includes(filter.group);
-    if (filter.mode === 'include') {
-      return hasGroup;
-    }
-    return !hasGroup;
-  });
+  return getPopularityFilterReasons(entry).length === 0;
 }
 
 function passesLetterFilters(entry) {
@@ -932,77 +1003,269 @@ function passesPopulationFilter(entry) {
   return true;
 }
 
-function buildActiveFilterSummary() {
+function getActiveFilterChips() {
   const tSummary = translations.fi?.filterSummary;
-  if (!tSummary) return '';
-  const parts = [];
+  if (!tSummary) return [];
+  const chips = [];
   state.popularityFilters.forEach((filter) => {
     const label = formatPopularityLabel(filter.group);
     const modeText = filter.mode === 'include' ? tSummary.groupInclude : tSummary.groupExclude;
-    parts.push(`${label} (${modeText})`);
+    chips.push({
+      text: `${label} (${modeText})`,
+      remove: () => {
+        state.popularityFilters = state.popularityFilters.filter((f) => f.id !== filter.id);
+        renderPopularityFilters();
+        applyFilters(true);
+      }
+    });
   });
   state.groupFilters.forEach((filter) => {
     const meta = groupMeta.get(filter.group);
     if (!meta) return;
     const label = getGroupLabel(meta);
     const modeText = filter.mode === 'include' ? tSummary.groupInclude : tSummary.groupExclude;
-    parts.push(`${label} (${modeText})`);
+    chips.push({
+      text: `${label} (${modeText})`,
+      remove: () => {
+        state.groupFilters = state.groupFilters.filter((f) => f.id !== filter.id);
+        applyFilters(true);
+      }
+    });
   });
   state.phoneticFilters.forEach((filter) => {
     const meta = phoneticMeta.get(filter.feature);
     if (!meta) return;
     const label = getFeatureLabel(meta) || filter.feature;
-    let descriptor = '';
-    if (filter.mode === 'include') {
-      descriptor = tSummary.featureInclude;
-    } else if (filter.mode === 'exclude') {
-      descriptor = tSummary.featureExclude;
-    } else if (filter.mode === 'min') {
-      const gradeLabel = getGradeLabelByValue(filter.grade ?? 1);
-      descriptor = `${tSummary.featureMin}: ${gradeLabel}`;
-    } else if (filter.mode === 'max') {
-      const gradeLabel = getGradeLabelByValue(filter.grade ?? 1);
-      descriptor = `${tSummary.featureMax}: ${gradeLabel}`;
-    }
-    parts.push(descriptor ? `${label} (${descriptor})` : label);
+    const descriptor = filter.mode === 'include' ? tSummary.featureInclude : tSummary.featureExclude;
+    chips.push({
+      text: `${label} (${descriptor})`,
+      remove: () => {
+        state.phoneticFilters = state.phoneticFilters.filter((f) => f.id !== filter.id);
+        applyFilters(true);
+      }
+    });
   });
   if (state.includeLetters) {
-    parts.push(`${tSummary.lettersInclude}: ${state.includeLetters}`);
+    chips.push({
+      text: `${tSummary.lettersInclude}: ${state.includeLetters}`,
+      remove: () => {
+        state.includeLetters = '';
+        const includeInput = $('#letters-include');
+        if (includeInput) includeInput.value = '';
+        applyFilters(true);
+      }
+    });
   }
   if (state.excludeLetters) {
-    parts.push(`${tSummary.lettersExclude}: ${state.excludeLetters}`);
+    chips.push({
+      text: `${tSummary.lettersExclude}: ${state.excludeLetters}`,
+      remove: () => {
+        state.excludeLetters = '';
+        const excludeInput = $('#letters-exclude');
+        if (excludeInput) excludeInput.value = '';
+        applyFilters(true);
+      }
+    });
+  }
+  if (
+    state.letterRange.min !== LETTER_LIMITS.min ||
+    state.letterRange.max !== LETTER_LIMITS.max
+  ) {
+    chips.push({
+      text: `Pituus ${state.letterRange.min}–${state.letterRange.max}`,
+      remove: () => {
+        state.letterRange = { ...LETTER_LIMITS };
+        lettersRangeControl?.setValues(LETTER_LIMITS.min, LETTER_LIMITS.max);
+        applyFilters(true);
+      }
+    });
   }
   if (
     state.populationRange.min !== POPULATION_LIMITS.min ||
     state.populationRange.max !== POPULATION_LIMITS.max
   ) {
-    parts.push(
-      `${tSummary.population}: ${formatNumberWithSpaces(state.populationRange.min)} - ${formatNumberWithSpaces(
+    chips.push({
+      text: `${tSummary.population}: ${formatNumberWithSpaces(state.populationRange.min)} - ${formatNumberWithSpaces(
         state.populationRange.max
-      )}`
-    );
+      )}`,
+      remove: () => {
+        state.populationRange = { ...POPULATION_LIMITS };
+        updatePopulationInputs();
+        applyFilters(true);
+      }
+    });
   }
-  return parts.join(', ');
+  return chips;
+}
+
+function collectFilterFailures(entry) {
+  const reasons = [];
+  if (!state.genders.has(entry.gender) && entry.gender !== 'unknown') {
+    reasons.push({
+      key: 'gender',
+      text: 'Sukupuolirajaus',
+      remove: null
+    });
+  }
+  const name = (entry.name || entry.display || '').toLowerCase();
+  if (state.includeLetters) {
+    const missing = Array.from(state.includeLetters).filter((char) => char && !name.includes(char));
+    if (missing.length) {
+      reasons.push({
+        text: `Puuttuvat kirjaimet: ${missing.join(', ')}`,
+        remove: () => {
+          state.includeLetters = '';
+          const includeInput = $('#letters-include');
+          if (includeInput) includeInput.value = '';
+          applyFilters(true);
+        }
+      });
+    }
+  }
+  if (state.excludeLetters) {
+    const present = Array.from(state.excludeLetters).filter((char) => char && name.includes(char));
+    if (present.length) {
+      reasons.push({
+        text: `Kielletyt kirjaimet: ${present.join(', ')}`,
+        remove: () => {
+          state.excludeLetters = '';
+          const excludeInput = $('#letters-exclude');
+          if (excludeInput) excludeInput.value = '';
+          applyFilters(true);
+        }
+      });
+    }
+  }
+  const lengthValue = Number(entry.metrics?.length ?? entry.display?.length ?? 0);
+  if (lengthValue < state.letterRange.min || lengthValue > state.letterRange.max) {
+    reasons.push({
+      text: `Pituusraja ${state.letterRange.min}-${state.letterRange.max}`,
+      remove: () => {
+        state.letterRange = { ...LETTER_LIMITS };
+        lettersRangeControl?.setValues(LETTER_LIMITS.min, LETTER_LIMITS.max);
+        applyFilters(true);
+      }
+    });
+  }
+  const total = Number(entry.popularity?.total ?? 0);
+  if (Number.isNaN(total) || total < state.populationRange.min || total > state.populationRange.max) {
+    reasons.push({
+      text: 'Nimenhaltijoiden määrä rajattu',
+      remove: () => {
+        state.populationRange = { ...POPULATION_LIMITS };
+        updatePopulationInputs();
+        applyFilters(true);
+      }
+    });
+  }
+  reasons.push(...getGroupFilterReasons(entry));
+  reasons.push(...getPopularityFilterReasons(entry));
+  reasons.push(...getPhoneticFilterReasons(entry));
+  return reasons;
+}
+
+function getGroupFilterReasons(entry) {
+  if (!state.groupFilters.length) return [];
+  const reasons = [];
+  const groups = Array.isArray(entry.groups) ? entry.groups : [];
+  state.groupFilters.forEach((filter) => {
+    const hasGroup = groups.includes(filter.group);
+    const label = getGroupLabel(groupMeta.get(filter.group)) || filter.group;
+    if (filter.mode === 'include' && !hasGroup) {
+      reasons.push({
+        text: `Puuttuu ryhmä: ${label}`,
+        remove: () => {
+          state.groupFilters = state.groupFilters.filter((f) => f.id !== filter.id);
+          applyFilters(true);
+        }
+      });
+    }
+    if (filter.mode === 'exclude' && hasGroup) {
+      reasons.push({
+        text: `Poistettu ryhmän vuoksi: ${label}`,
+        remove: () => {
+          state.groupFilters = state.groupFilters.filter((f) => f.id !== filter.id);
+          applyFilters(true);
+        }
+      });
+    }
+  });
+  return reasons;
+}
+
+function getPopularityFilterReasons(entry) {
+  if (!state.popularityFilters.length) return [];
+  const reasons = [];
+  const groups = Array.isArray(entry.groups) ? entry.groups : [];
+  state.popularityFilters.forEach((filter) => {
+    const hasGroup = groups.includes(filter.group);
+    const label = formatPopularityLabel(filter.group);
+    if (filter.mode === 'include' && !hasGroup) {
+      reasons.push({
+        text: `Ei kuulu joukkoon: ${label}`,
+        remove: () => {
+          state.popularityFilters = state.popularityFilters.filter((f) => f.id !== filter.id);
+          applyFilters(true);
+        }
+      });
+    }
+    if (filter.mode === 'exclude' && hasGroup) {
+      reasons.push({
+        text: `Poistettu suosion vuoksi: ${label}`,
+        remove: () => {
+          state.popularityFilters = state.popularityFilters.filter((f) => f.id !== filter.id);
+          applyFilters(true);
+        }
+      });
+    }
+  });
+  return reasons;
+}
+
+function getPhoneticFilterReasons(entry) {
+  if (!state.phoneticFilters.length) return [];
+  const reasons = [];
+  state.phoneticFilters.forEach((filter) => {
+    const feature = entry.phonetic[filter.feature];
+    const label = getFeatureLabel(phoneticMeta.get(filter.feature)) || filter.feature;
+    const mode = filter.mode;
+    if (!feature) {
+        reasons.push({
+          text: `Ei tietoa: ${label}`,
+          remove: () => {
+            state.phoneticFilters = state.phoneticFilters.filter((f) => f.id !== filter.id);
+            applyFilters(true);
+          }
+        });
+      return;
+    }
+    if (mode === 'include') {
+      if (!feature.value) {
+        reasons.push({
+          text: `Puuttuu piirre: ${label}`,
+          remove: () => {
+            state.phoneticFilters = state.phoneticFilters.filter((f) => f.id !== filter.id);
+            applyFilters(true);
+          }
+        });
+      }
+    } else if (mode === 'exclude') {
+      if (feature.value) {
+        reasons.push({
+          text: `Suodatettu piirteen vuoksi: ${label}`,
+          remove: () => {
+            state.phoneticFilters = state.phoneticFilters.filter((f) => f.id !== filter.id);
+            applyFilters(true);
+          }
+        });
+      }
+    }
+  });
+  return reasons;
 }
 
 function passesPhoneticFilters(entry) {
-  if (!state.phoneticFilters.length) return true;
-  return state.phoneticFilters.every((filter) => {
-    const feature = entry.phonetic[filter.feature];
-    if (!feature) return false;
-    switch (filter.mode) {
-      case 'include':
-        return Boolean(feature.value);
-      case 'exclude':
-        return !feature.value;
-      case 'min':
-        return (feature.grade ?? 0) >= (filter.grade ?? 1);
-      case 'max':
-        return (feature.grade ?? 0) <= (filter.grade ?? 1);
-      default:
-        return true;
-    }
-  });
+  return getPhoneticFilterReasons(entry).length === 0;
 }
 
 function sortResults(list) {
@@ -1429,6 +1692,22 @@ function closeWeightEditor() {
   weightEditorInputs = [];
 }
 
+function openStoryModal() {
+  const modal = $('#story-modal');
+  if (!modal) return;
+  modal.hidden = false;
+  document.body.classList.add('modal-open');
+}
+
+function closeStoryModal() {
+  const modal = $('#story-modal');
+  if (!modal) return;
+  modal.hidden = true;
+  if (!isWeightEditorOpen()) {
+    document.body.classList.remove('modal-open');
+  }
+}
+
 function renderWeightEditorRows(prefillValues, sourceWeights) {
   if (!weightEditorControls?.list) return;
   const weights = sourceWeights || getActiveWeights();
@@ -1612,91 +1891,249 @@ function syncWeightEditorTexts() {
   }
 }
 
+function renderActiveFilters() {
+  const container = $('#active-filters');
+  if (!container) return;
+  container.innerHTML = '';
+  const chips = getActiveFilterChips();
+  if (!chips.length) {
+    container.hidden = true;
+    return;
+  }
+  container.hidden = false;
+  chips.forEach((chip) => {
+    const tag = document.createElement('span');
+    tag.className = 'filter-chip';
+    tag.textContent = chip.text;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chip-remove';
+    btn.textContent = '×';
+    btn.title = 'Poista rajaus';
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      chip.remove();
+    });
+    tag.appendChild(btn);
+    container.appendChild(tag);
+  });
+}
+
+function createNameCard(entry, t, surnameEntry, { filtered = false } = {}) {
+  const card = document.createElement('details');
+  card.className = 'name-card';
+  if (filtered) {
+    card.classList.add('filtered-out');
+  }
+  const summary = document.createElement('summary');
+  const popularitySuffix = 'hlöä';
+  const tagsWrap = document.createElement('div');
+  tagsWrap.className = 'summary-tags';
+
+  const titleSpan = document.createElement('span');
+  titleSpan.className = 'name-title';
+  titleSpan.textContent = entry.display;
+  summary.appendChild(titleSpan);
+
+  const popTag = createSummaryTag(
+    `${entry.popularity.total.toLocaleString('fi-FI')} ${popularitySuffix}`,
+    'tag-pop'
+  );
+  tagsWrap.appendChild(popTag);
+
+  if (entry.topRank && entry.topRank.rank && entry.topRank.rank <= 500) {
+    const rankText = `#${entry.topRank.rank} suosituin nimi`;
+    const rankClass = entry.topRank.gender === 'female' ? 'tag-rank-female' : 'tag-rank-male';
+    tagsWrap.appendChild(createSummaryTag(rankText, rankClass));
+  }
+
+  const matchText = entry._match !== null ? `${t.matchLabel}: ${(entry._match * 100).toFixed(1)}%` : '';
+  tagsWrap.appendChild(createSummaryTag(matchText, 'tag-match'));
+
+  let comboText = '';
+  if (entry._comboEstimate && surnameEntry) {
+    comboText = t.comboTag(formatCount(entry._comboEstimate));
+  }
+  tagsWrap.appendChild(createSummaryTag(comboText, 'tag-combo'));
+
+  if (filtered && Array.isArray(entry._filteredReasons)) {
+    entry._filteredReasons.slice(0, 3).forEach((reason) => {
+      tagsWrap.appendChild(createSummaryTag(reason.text || reason, 'reason'));
+    });
+  }
+
+  summary.appendChild(tagsWrap);
+  const favoriteBtn = createFavoriteButton(entry);
+  summary.appendChild(favoriteBtn);
+  card.appendChild(summary);
+
+  const body = document.createElement('div');
+  body.className = 'name-card-body';
+  card.appendChild(body);
+
+  card.addEventListener('toggle', () => {
+    if (card.open) {
+      loadCardDetails(card, body, entry, t, surnameEntry);
+    }
+  });
+  return card;
+}
+
+function createFavoriteButton(entry) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'favorite-btn';
+  btn.title = 'Lisää suosikkeihin';
+  const setState = () => {
+    const fav = isFavoriteName(entry.name);
+    btn.textContent = fav ? '★' : '☆';
+    btn.classList.toggle('active', fav);
+    btn.title = fav ? 'Poista suosikeista' : 'Lisää suosikkeihin';
+  };
+  setState();
+  btn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleFavoriteName(entry);
+    setState();
+  });
+  return btn;
+}
+
+function shouldShowDetailAd() {
+  detailAdCounter += 1;
+  if (DETAIL_AD_FREQUENCY <= 0) return false;
+  return detailAdCounter % DETAIL_AD_FREQUENCY === 0;
+}
+
+function createFilteredGroupPlaceholder(filteredEntries, t, surnameEntry) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'filtered-divider';
+  if (!filteredEntries.length) {
+    const top = document.createElement('div');
+    top.className = 'filtered-line';
+    wrapper.appendChild(top);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ghost small filtered-toggle';
+    button.textContent = 'Suodatetut nimet on piilotettu';
+    wrapper.appendChild(button);
+    const bottom = document.createElement('div');
+    bottom.className = 'filtered-line';
+    wrapper.appendChild(bottom);
+    return wrapper;
+  }
+  const line = document.createElement('div');
+  line.className = 'filtered-line';
+  wrapper.appendChild(line);
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'ghost small filtered-toggle';
+  button.textContent = `${filteredEntries.length} nimeä suodatettu, klikkaa näyttääksesi`;
+  button.addEventListener('click', () => {
+    const expanded = document.createElement('div');
+    expanded.className = 'filtered-expanded';
+    const collapseTop = createCollapseButton(filteredEntries, t, surnameEntry, expanded);
+    expanded.appendChild(collapseTop);
+    let offset = 0;
+    const listContainer = document.createElement('div');
+    listContainer.className = 'filtered-chunk';
+    expanded.appendChild(listContainer);
+    const moreBtn = document.createElement('button');
+    moreBtn.type = 'button';
+    moreBtn.className = 'ghost small filtered-toggle';
+    moreBtn.textContent = 'Näytä lisää suodatettuja';
+    const appendChunk = () => {
+      const end = Math.min(offset + FILTERED_BATCH_SIZE, filteredEntries.length);
+      const slice = filteredEntries.slice(offset, end);
+      slice.forEach((entry) => {
+        const card = createNameCard(entry, t, surnameEntry, { filtered: true });
+        listContainer.appendChild(card);
+      });
+      offset = end;
+      if (offset >= filteredEntries.length) {
+        moreBtn.hidden = true;
+      } else {
+        const remaining = filteredEntries.length - offset;
+        moreBtn.textContent = `Näytä lisää (${remaining})`;
+      }
+    };
+    appendChunk();
+    if (filteredEntries.length > offset) {
+      moreBtn.addEventListener('click', appendChunk);
+      expanded.appendChild(moreBtn);
+    }
+    const collapseBottom = createCollapseButton(filteredEntries, t, surnameEntry, expanded);
+    expanded.appendChild(collapseBottom);
+    wrapper.replaceWith(expanded);
+  });
+  wrapper.appendChild(button);
+  const bottomLine = document.createElement('div');
+  bottomLine.className = 'filtered-line';
+  wrapper.appendChild(bottomLine);
+  return wrapper;
+}
+
+function createCollapseButton(filteredEntries, t, surnameEntry, containerEl) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'ghost small filtered-toggle';
+  btn.textContent = 'Piilota suodatetut nimet';
+  btn.addEventListener('click', () => {
+    containerEl.replaceWith(createFilteredGroupPlaceholder(filteredEntries, t, surnameEntry));
+  });
+  return btn;
+}
+
 function renderResults() {
   const t = translations.fi;
   const list = $('#results-list');
   const { surnameEntry, missingSurname } = state.matchInfo;
   const total = currentResults.length;
+  list.innerHTML = '';
+  let renderedCount = 0;
   if (!total) {
     list.innerHTML = `<p class="hint">${t.noResults}</p>`;
   } else {
-    const startIndex = state.page * PAGE_SIZE;
-    const endIndex = Math.min(startIndex + PAGE_SIZE, total);
-    const visible = currentResults.slice(startIndex, endIndex);
-    list.innerHTML = '';
-    visible.forEach((entry, idx) => {
-      const card = document.createElement('details');
-      card.className = 'name-card';
-      const summary = document.createElement('summary');
-      const popularitySuffix = 'hlöä';
-      const tagsWrap = document.createElement('div');
-      tagsWrap.className = 'summary-tags';
-
-      const titleSpan = document.createElement('span');
-      titleSpan.className = 'name-title';
-      titleSpan.textContent = entry.display;
-      summary.appendChild(titleSpan);
-
-      const popTag = createSummaryTag(
-        `${entry.popularity.total.toLocaleString('fi-FI')} ${popularitySuffix}`,
-        'tag-pop'
-      );
-      tagsWrap.appendChild(popTag);
-
-      if (entry.topRank && entry.topRank.rank && entry.topRank.rank <= 500) {
-        const rankText = `#${entry.topRank.rank} suosituin nimi`;
-        const rankClass = entry.topRank.gender === 'female' ? 'tag-rank-female' : 'tag-rank-male';
-        tagsWrap.appendChild(createSummaryTag(rankText, rankClass));
-      }
-
-      const matchText =
-        entry._match !== null ? `${t.matchLabel}: ${(entry._match * 100).toFixed(1)}%` : '';
-      tagsWrap.appendChild(createSummaryTag(matchText, 'tag-match'));
-
-      let comboText = '';
-      if (entry._comboEstimate && surnameEntry) {
-        comboText = t.comboTag(formatCount(entry._comboEstimate));
-      }
-      tagsWrap.appendChild(createSummaryTag(comboText, 'tag-combo'));
-
-      summary.appendChild(tagsWrap);
-      card.appendChild(summary);
-
-      const body = document.createElement('div');
-      body.className = 'name-card-body';
-      card.appendChild(body);
-
-      card.addEventListener('toggle', () => {
-        if (card.open) {
-          loadCardDetails(card, body, entry, t, surnameEntry);
+    let allowedRendered = 0;
+    let filteredBuffer = [];
+    const flushFilteredBuffer = () => {
+      if (!filteredBuffer.length) return;
+      const placeholder = createFilteredGroupPlaceholder(filteredBuffer, t, surnameEntry);
+      list.appendChild(placeholder);
+      filteredBuffer = [];
+    };
+    for (const entry of orderedResults) {
+      if (allowedRendered >= state.visibleCount) break;
+      const isFiltered = entry._filteredReasons?.length;
+      const hasGenderBlock = entry._filteredReasons?.some((r) => r.key === 'gender');
+      if (isFiltered) {
+        if (hasGenderBlock) {
+          continue;
         }
-      });
-      list.appendChild(card);
-      const globalIndex = startIndex + idx + 1;
-      if (globalIndex % 5 === 0) {
-        list.appendChild(createAdPlaceholder('inline'));
+        filteredBuffer.push(entry);
+        continue;
       }
-    });
-    $('#result-count').textContent = t.results(startIndex + 1, endIndex, total);
+      flushFilteredBuffer();
+      const card = createNameCard(entry, t, surnameEntry, { filtered: false });
+      list.appendChild(card);
+      allowedRendered += 1;
+      renderedCount += 1;
+    }
+    flushFilteredBuffer();
   }
-  if (!total) {
-    $('#result-count').textContent = t.noResults;
-  }
+  const shownCount = renderedCount;
+  $('#result-count').textContent = total ? t.results(1, shownCount, total) : t.noResults;
   const typedSurname = getTypedSurname();
   const surnameLabel = typedSurname || state.surname || '';
   $('#match-context').textContent = missingSurname
     ? translations.fi.missingSurname(surnameLabel)
     : translations.fi.match(surnameLabel || (surnameEntry?.display ?? ''));
-  const summaryEl = $('#active-filters');
-  if (summaryEl) {
-    const summaryText = buildActiveFilterSummary();
-    summaryEl.textContent = summaryText;
-    summaryEl.hidden = !summaryText;
+  renderActiveFilters();
+  const loadMoreBtn = $('#load-more');
+  if (loadMoreBtn) {
+    loadMoreBtn.disabled = shownCount >= total;
+    loadMoreBtn.hidden = !total || shownCount >= total;
   }
-  $('#prev-page').disabled = state.page === 0;
-  $('#next-page').disabled = (state.page + 1) * PAGE_SIZE >= total;
-  $('#prev-page-bottom').disabled = state.page === 0;
-  $('#next-page-bottom').disabled = (state.page + 1) * PAGE_SIZE >= total;
 }
 
 function loadCardDetails(card, bodyContainer, entry, t, surnameEntry) {
@@ -1734,14 +2171,10 @@ function hydrateCardBody(card, container, entry, t, surnameEntry) {
 
   const details = document.createElement('div');
   details.className = 'details-section';
-
-  const pronunciationRow = createDetailRow(t.pronunciationTitle, renderPronunciation(entry));
-  if (pronunciationRow) details.appendChild(pronunciationRow);
-
-  const firstAnalysisText = buildFirstNameAnalysis(entry, surnameEntry);
-  if (firstAnalysisText) {
-    const firstAnalysisRow = createDetailRow(t.firstNameAnalysisTitle, firstAnalysisText);
-    if (firstAnalysisRow) details.appendChild(firstAnalysisRow);
+  const groupsHtml = renderCombinedTraits(entry, t);
+  if (groupsHtml) {
+    const groupRow = createDetailRow('Ominaisuudet', groupsHtml);
+    if (groupRow) details.appendChild(groupRow);
   }
 
   const comboContent = renderComboEstimate(entry, t, surnameEntry);
@@ -1750,34 +2183,36 @@ function hydrateCardBody(card, container, entry, t, surnameEntry) {
     if (comboRow) details.appendChild(comboRow);
   }
 
-  const groupsHtml = renderGroupChips(entry, t);
-  if (groupsHtml) {
-    const groupRow = createDetailRow(t.groupTitle, groupsHtml);
-    if (groupRow) details.appendChild(groupRow);
+  if (shouldShowDetailAd()) {
+    const ad = document.createElement('div');
+    ad.className = 'ad-slot detail-ad';
+    ad.textContent = 'Mainospaikka';
+    details.appendChild(ad);
   }
 
-  const phoneticSummary = renderPhoneticSummary(entry, t);
-  if (phoneticSummary) {
-    const phoneticRow = createDetailRow(t.phoneticTitle, phoneticSummary);
-    if (phoneticRow) details.appendChild(phoneticRow);
+  const historyContent = document.createElement('div');
+  historyContent.className = 'chart-shell';
+  const historyChart = document.createElement('div');
+  historyChart.className = 'plotly-chart';
+  historyContent.appendChild(historyChart);
+  const historyRow = createDetailRow(t.historyTitle, historyContent);
+  if (historyRow) {
+    historyRow.classList.add('chart-row');
+    details.appendChild(historyRow);
+  }
+
+  const ageContent = document.createElement('div');
+  ageContent.className = 'chart-shell';
+  const ageChart = document.createElement('div');
+  ageChart.className = 'plotly-chart';
+  ageContent.appendChild(ageChart);
+  const ageRow = createDetailRow(t.ageDistributionTitle, ageContent);
+  if (ageRow) {
+    ageRow.classList.add('chart-row');
+    details.appendChild(ageRow);
   }
 
   container.appendChild(details);
-
-  const chartsSection = document.createElement('div');
-  chartsSection.className = 'charts-section';
-
-  const historyBlock = document.createElement('div');
-  historyBlock.className = 'chart-block';
-  historyBlock.innerHTML = `<h4>${t.historyTitle}</h4><div class="plotly-chart"></div>`;
-  chartsSection.appendChild(historyBlock);
-
-  const ageBlock = document.createElement('div');
-  ageBlock.className = 'chart-block';
-  ageBlock.innerHTML = `<h4>${t.ageDistributionTitle}</h4><div class="plotly-chart"></div>`;
-  chartsSection.appendChild(ageBlock);
-
-  container.appendChild(chartsSection);
 
   const descriptionText = entry.description_fi || '';
   if (descriptionText) {
@@ -1794,9 +2229,9 @@ function hydrateCardBody(card, container, entry, t, surnameEntry) {
   affiliateLink.rel = 'noopener';
   container.appendChild(affiliateLink);
 
-  const historyContainer = historyBlock.querySelector('.plotly-chart');
-  renderUsageChart(historyContainer, entry.history, t);
-  const ageContainer = ageBlock.querySelector('.plotly-chart');
+  const historyContainer = historyChart;
+  renderUsageChart(historyContainer, entry.history, t, entry.display);
+  const ageContainer = ageChart;
   renderAgeDistributionChart(ageContainer, entry.population, entry.popularity.total, t);
 
   card.dataset.hydrated = 'true';
@@ -1805,7 +2240,7 @@ function hydrateCardBody(card, container, entry, t, surnameEntry) {
   return refs;
 }
 
-function renderUsageChart(container, history, t) {
+function renderUsageChart(container, history, t, entryName = '') {
   if (!container) return;
   const plotly = window.Plotly;
   if (!plotly) {
@@ -1839,6 +2274,15 @@ function renderUsageChart(container, history, t) {
   if (!hasData) {
     container.textContent = t.historyNoData;
     return;
+  }
+  const nimipalveluLink = entryName
+    ? `<a href="https://nimipalvelu.dvv.fi/etunimihaku?nimi=${encodeURIComponent(entryName)}" target="_blank" rel="noopener">linkki</a>`
+    : '';
+  if (nimipalveluLink) {
+    const linkEl = document.createElement('div');
+    linkEl.className = 'history-link';
+    linkEl.innerHTML = `${t.historyTitle} (${nimipalveluLink})`;
+    container.parentElement?.insertBefore(linkEl, container);
   }
   const hoverEnabled = !window.matchMedia('(hover: none)').matches;
   const traces = datasets.map((dataset) => ({
@@ -2244,14 +2688,27 @@ function getSurnameUsageText(entry) {
   if (!entry) return '';
   const total = Number(entry.popularity);
   const rankKey = (entry.name || '').toLowerCase();
-  const rank = surnameRankMap.get(rankKey);
-  if (!Number.isFinite(total) || !Number.isFinite(rank)) {
+  let rank = surnameRankMap.get(rankKey);
+  if (!Number.isFinite(rank) && Number.isFinite(total)) {
+    // Fallback: estimate rank based on popularity ordering if map missing.
+    const sorted = [...surnameRankMap.entries()].sort((a, b) => a[1] - b[1]);
+    if (!sorted.length) {
+      rank = null;
+    } else {
+      const greater = sorted.filter(([_, r]) => r <= total).length;
+      rank = greater || null;
+    }
+  }
+  if (!Number.isFinite(total)) {
     return '';
   }
   const formattedCount = formatNumberWithSpaces(total);
   const usageBuilder = translations.fi?.surnameUsage;
   if (typeof usageBuilder !== 'function') {
-    return '';
+    return formattedCount ? `Sukunimeä käyttää ${formattedCount} henkilöä.` : '';
+  }
+  if (!Number.isFinite(rank)) {
+    return `Sukunimeä käyttää ${formattedCount} henkilöä.`;
   }
   return usageBuilder(formattedCount, rank);
 }
@@ -2279,20 +2736,19 @@ function getGroupDescription(key) {
 function getPopularityKeys() {
   const popular = [];
   const trend = [];
+  const growth = [];
   const evergreen = [];
-  const parsePeriod = (key) => {
-    const parts = key.split('_')[1] || '';
-    const start = parseInt(parts.split('-')[0], 10);
-    return Number.isFinite(start) ? start : -Infinity;
-  };
+  const parsePeriod = parsePeriodKey;
   groupMeta.forEach((_, key) => {
     if (key.startsWith('popular_')) popular.push(key);
     else if (key.startsWith('trend_')) trend.push(key);
+    else if (key.startsWith('growth_')) growth.push(key);
     else if (key === 'evergreen') evergreen.push(key);
   });
   popular.sort((a, b) => parsePeriod(b) - parsePeriod(a));
   trend.sort((a, b) => parsePeriod(b) - parsePeriod(a));
-  return [...popular, ...trend, ...evergreen];
+  growth.sort((a, b) => parsePeriod(b) - parsePeriod(a));
+  return [...popular, ...trend, ...growth, ...evergreen];
 }
 
 function formatPopularityLabel(key) {
@@ -2305,9 +2761,27 @@ function formatPopularityLabel(key) {
     const suffix = key.replace('trend_', '');
     return `Suosion huipulla ${suffix}`;
   }
+  if (key.startsWith('growth_')) {
+    const suffix = key.replace('growth_', '');
+    return `Kasvattanut suosiota ${suffix}`;
+  }
   if (key === 'evergreen') return 'Aina suositut';
   const meta = groupMeta.get(key);
   return meta ? getGroupLabel(meta) : key;
+}
+
+function getPeriodLabel(key) {
+  if (!key) return '';
+  const parts = key.split('_');
+  return parts.length > 1 ? parts.slice(1).join('_') : key;
+}
+
+function parsePeriodKey(key) {
+  const match = key.match(/_(\d{4}-\d{4}|-?\d{3,4})$/);
+  if (!match) return -Infinity;
+  const startStr = match[1].split('-')[0];
+  const start = parseInt(startStr, 10);
+  return Number.isFinite(start) ? start : -Infinity;
 }
 
 function getGradeLabelByValue(value) {
@@ -2340,15 +2814,19 @@ function updateSurnameAnalysis(entry, missingSurname) {
     container.textContent = '';
     return;
   }
-  if (missingSurname || !entry) {
-    container.textContent = translations.fi.surnameAnalysisMissing;
+  let resolvedEntry = entry;
+  if (!resolvedEntry && surnameMap.size) {
+    resolvedEntry = surnameMap.get(surname.toLowerCase()) || null;
+    missingSurname = !resolvedEntry;
+  }
+  if (missingSurname || !resolvedEntry) {
+    container.textContent = 'Sukunimeä ei löytynyt.';
     return;
   }
-  const usageText = getSurnameUsageText(entry);
-  const insight = buildSurnameAnalysis(entry);
-  const title = `<strong>${translations.fi.surnameAnalysisTitle}:</strong>`;
-  const usageHtml = usageText ? `<span class="surname-usage">${usageText}</span>` : '';
-  container.innerHTML = `${usageHtml}${title} ${insight}`;
+  const usageText = getSurnameUsageText(resolvedEntry);
+  container.innerHTML = usageText
+    ? `<span class="surname-usage">${usageText}</span>`
+    : 'Sukunimen käyttöä ei löytynyt.';
   container.title = '';
 }
 
@@ -2453,10 +2931,24 @@ function createAdPlaceholder(position = 'inline') {
   return slot;
 }
 
+function resetDetailAdCounter() {
+  detailAdCounter = 0;
+}
+
 function renderPronunciation(entry) {
   if (!entry.ipa) return '';
-  const value = `fi: ${escapeHtml(entry.ipa.fi || '-')}`;
-  return `<div class="pronunciation-values"><span>${value}</span></div>`;
+  const languages = [
+    { key: 'fi', label: 'fi' },
+    { key: 'sv', label: 'sv' },
+    { key: 'en', label: 'en' }
+  ];
+  const spans = languages
+    .map(({ key, label }) => {
+      const value = entry.ipa[key] || '-';
+      return `<span>${label}: ${escapeHtml(String(value))}</span>`;
+    })
+    .join('');
+  return `<div class="pronunciation-values">${spans}</div>`;
 }
 
 function renderComboEstimate(entry, t, surnameEntry) {
@@ -2512,6 +3004,12 @@ function renderPhoneticSummary(entry, t) {
     .join('');
 }
 
+function renderCombinedTraits(entry, t) {
+  const groupHtml = renderGroupChips(entry, t);
+  const phoneticHtml = renderPhoneticSummary(entry, t);
+  return `${groupHtml} ${phoneticHtml}`;
+}
+
 function fetchWikiSummary(entry, container, t) {
   if (!container || container.dataset.status === 'loading' || container.dataset.status === 'done') {
     return;
@@ -2539,7 +3037,8 @@ function fetchWikiSummary(entry, container, t) {
           attempt(idx + 1);
           return;
         }
-        container.innerHTML = `<strong>${t.wikiTitle}:</strong> ${escapeHtml(extract)}`;
+        const wikiUrl = `https://fi.wikipedia.org/wiki/${candidates[idx]}`;
+        container.innerHTML = `<strong>${t.wikiTitle} (<a href="${wikiUrl}" target="_blank" rel="noopener">Wikipedia</a>):</strong> ${escapeHtml(extract)}`;
         container.dataset.status = 'done';
       })
       .catch(() => attempt(idx + 1));
@@ -2606,45 +3105,61 @@ function bindEvents() {
   const surnameInput = $('#surname-input');
   if (surnameInput) {
     surnameInput.addEventListener('input', () => {
+      const currentValue = surnameInput.value.trim();
+      state.surname = currentValue;
+      const entry = currentValue ? surnameMap.get(currentValue.toLowerCase()) : null;
+      const missing = Boolean(currentValue && !entry);
+      updateSurnameAnalysis(entry, missing);
       clearTimeout(surnameInputTimer);
       surnameInputTimer = setTimeout(() => {
         applyFilters();
       }, 400);
     });
   }
+  ['#letters-include', '#letters-exclude'].forEach((id) => {
+    const el = document.querySelector(id);
+    if (el) {
+      el.addEventListener('input', () => scheduleApplyFilters());
+    }
+  });
   $('#toggle-sort').addEventListener('click', () => {
     state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
     $('#toggle-sort').textContent = state.sortDir === 'asc' ? '↑' : '↓';
     applyFilters();
   });
-  $('[data-action="add-phonetic"]').addEventListener('click', addPhoneticFilter);
-  $('[data-action="add-group"]').addEventListener('click', addGroupFilter);
-  $('[data-action="add-popularity"]').addEventListener('click', addPopularityFilter);
-  $('#apply-filters').addEventListener('click', applyFilters);
-  $('#prev-page').addEventListener('click', () => {
-    if (state.page === 0) return;
-    state.page -= 1;
-    renderResults();
+  const addPhoneticBtn = $('[data-action="add-phonetic"]');
+  if (addPhoneticBtn) addPhoneticBtn.addEventListener('click', addPhoneticFilter);
+  const addGroupBtn = $('[data-action="add-group"]');
+  if (addGroupBtn) addGroupBtn.addEventListener('click', addGroupFilter);
+  const addPopBtn = $('[data-action="add-popularity"]');
+  if (addPopBtn) addPopBtn.addEventListener('click', addPopularityFilter);
+  document.querySelectorAll('input[name="gender"]').forEach((checkbox) => {
+    checkbox.addEventListener('change', () => applyFilters());
   });
-  $('#next-page').addEventListener('click', () => {
-    if ((state.page + 1) * PAGE_SIZE >= currentResults.length) return;
-    state.page += 1;
-    renderResults();
+  const loadMoreBtn = $('#load-more');
+  if (loadMoreBtn) {
+    loadMoreBtn.addEventListener('click', () => {
+      state.visibleCount = Math.min(state.visibleCount + PAGE_SIZE, currentResults.length);
+      renderResults();
+    });
+  }
+  const storyTrigger = $('#open-story');
+  if (storyTrigger) {
+    storyTrigger.addEventListener('click', openStoryModal);
+  }
+  document.querySelectorAll('[data-action="dismiss-story"]').forEach((el) => {
+    el.addEventListener('click', closeStoryModal);
   });
-  $('#prev-page-bottom').addEventListener('click', () => {
-    if (state.page === 0) return;
-    state.page -= 1;
-    renderResults();
-  });
-  $('#next-page-bottom').addEventListener('click', () => {
-    if ((state.page + 1) * PAGE_SIZE >= currentResults.length) return;
-    state.page += 1;
-    renderResults();
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeStoryModal();
+    }
   });
 }
 
 async function init() {
   data = await loadData();
+  favorites = loadFavoritesFromStorage();
   prepareMatchingWeights();
   buildMetaMaps();
   applySchemaLimits();
@@ -2655,6 +3170,7 @@ async function init() {
   syncFormWithState();
   initWeightEditor();
   bindEvents();
+  resetDetailAdCounter();
   applyFilters();
 }
 

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fi">
+  <head>
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-NJMD9WQQ');</script>
+    <!-- End Google Tag Manager -->
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Suosikit - Nimi vauvalle</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Merienda:wght@700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+  </head>
+  <body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-NJMD9WQQ"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
+    <header class="page-header">
+      <div class="branding">
+        <p class="eyebrow">Suosikit</p>
+        <h1 class="hero-title">Tallennetut nimisuosikit</h1>
+        <p class="hero-subtitle">Näet omat suosikkisi tai sinulle jaetun listan. Voit poistaa nimiä ja tallentaa muutokset.</p>
+      </div>
+      <div class="favorite-actions">
+        <a class="ghost" href="index.html">← Takaisin hakuun</a>
+        <button class="primary" id="save-favorites" hidden>Tallenna tehdyt muutokset</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="results" aria-live="polite">
+        <div class="favorites-toolbar">
+          <div>
+            <strong id="favorites-count">Ladataan...</strong>
+            <p class="hint" id="favorites-context"></p>
+          </div>
+          <div class="share-actions">
+            <button class="ghost" type="button" id="share-favorites">Jaa suosikit</button>
+            <input type="text" id="share-url" class="share-input" readonly />
+          </div>
+        </div>
+        <div id="favorites-list" class="name-list"></div>
+      </section>
+    </main>
+
+    <script type="module" src="favorites.js"></script>
+  </body>
+</html>

@@ -1,22 +1,40 @@
 <!doctype html>
 <html lang="fi">
   <head>
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-NJMD9WQQ');</script>
+    <!-- End Google Tag Manager -->
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Nimihaku</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Merienda:wght@700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.0/dist/nouislider.min.css" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-NJMD9WQQ"
+    height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
     <header class="page-header">
       <div class="branding">
         <!--<p class="eyebrow"></p>-->
         <h1 class="hero-title">Nimi vauvalle</h1>
-        <p class="hero-subtitle">Sivu auttaa sinua löytämään kaikista sopivimman nimen uudelle perheenjäsenellesi. Sivu näyttää palvelinkulujen kattamiseksi mainoksia. Jos haluat tukea sivuston kehitystyötä, voit harkita ostavasti jotain sivuston affiliate-linkkien kautta.</p>
+        <p class="hero-subtitle">
+          Sivu auttaa sinua löytämään kaikista sopivimman nimen uudelle perheenjäsenellesi.
+          <button class="link-button" type="button" id="open-story">Sivun tarina</button>
+        </p>
       </div>
+      <a class="ghost favorite-nav" href="favorites.html">Avaa suosikit</a>
       <div class="ad-slot ad-top" aria-label="Main ad placeholder">Mainospaikka</div>
     </header>
 
@@ -28,7 +46,7 @@
             <h3>Perustiedot</h3>
             <div class="block-grid">
               <fieldset class="gender-field">
-                <legend>Sukupuoli</legend>
+                <legend>Nimen sukupuoli</legend>
                 <label><input type="checkbox" name="gender" value="female" checked /> Tyttö</label>
                 <label><input type="checkbox" name="gender" value="male" checked /> Poika</label>
                 <label><input type="checkbox" name="gender" value="unisex" checked /> Sukupuolineutraalit nimet</label>
@@ -37,7 +55,7 @@
                 Kirjoita vauvan sukunimi
                 <input type="text" id="surname-input" name="surname" placeholder="Esim. Korhonen" autocomplete="off" />
                 <span class="hint">
-                  Sukunimeä ei tallenneta mihinkään. Sivusto suosittelee etunimiä sukunimien perusteella. Sivusto osaa suositella etunimiä ainoastaan sukunimille, joilla on vähintään 20 nimenhaltijaa.  
+                  Sukunimeä käytetään sopivien etunimien suositteluun. Sukunimeä ei tallenneta.  
                   <button type="button" class="link-button" id="edit-weight-button">Säädä suosittelualgoritmia</button>
                 </span>
                 <div id="surname-analysis" class="hint surname-analysis"></div>
@@ -45,22 +63,14 @@
             </div>
           </div>
 
-          <details id="group-filter-panel" open>
-            <summary>Nimen ominaisuudet</summary>
-            <p class="hint">Rajoita nimiä esimerkiksi vain perinteisiin, luontoteemaisiin tai tällä hetkellä suosittuihin nimiin.</p>
-            <div id="group-filters"></div>
-            <button class="ghost" type="button" data-action="add-group">+ Lisää rajaus</button>
-          </details>
-
-          <details id="phonetic-filter-panel">
-            <summary>Nimen ääntäminen</summary>
-            <p class="hint">Rajoita nimiä esimerkiksi vain pehmeän kuuloisiin nimiin tai sellaisiin nimiin, joissa ei ole voimakkaita r-äänteitä.</p>
-            <div id="phonetic-filters"></div>
-            <button class="ghost" type="button" data-action="add-phonetic">+ Lisää rajaus</button>
+          <details id="desired-filter-panel" open>
+            <summary>Nimen toivotut ominaisuudet</summary>
+            <p class="hint tri-legend">○ ei aktiivinen · + vain tällaiset nimet · – poista tällaiset nimet</p>
+            <div id="feature-filters"></div>
           </details>
 
           <details id="range-filter-panel">
-            <summary>Kirjain- ja pituusrajat</summary>
+            <summary>Nimen kirjain- ja pituusrajoitukset</summary>
             <div class="letter-grid">
               <label>
                 Nimen tulee sisältää
@@ -85,10 +95,9 @@
           </details>
 
           <details id="popularity-filter-panel">
-            <summary>Nimen suosio</summary>
-            <p class="hint">Suodata esimerkiksi suosittuja nimiä, suosion huipulla olevia tai ikivihreitä nimiä.</p>
-            <div id="popularity-filters"></div>
-            <button class="ghost" type="button" data-action="add-popularity">+ Lisää suosiorajaus</button>
+            <summary>Nimen suosioon liittyvät rajoitukset</summary>
+            <p class="hint tri-legend">○ ei aktiivinen · + vain tällaiset nimet · – poista tällaiset nimet</p>
+            <div id="popularity-filters" class="popularity-grid"></div>
             <div class="range-field">
               <div class="range-header">
                 <span>Nimenhaltijoiden määrä</span>
@@ -106,16 +115,6 @@
               </div>
             </div>
           </details>
-
-          <div class="filter-actions">
-            <div class="filter-sources" aria-live="polite">
-              <p class="hint">
-                Datan lähteet:
-                <a href="https://dvv.fi/nimipalvelu" target="_blank" rel="noopener">DVV</a>, <a href="https://fi.wikipedia.org/wiki/Wikipedia:Etusivu" target="_blank" rel="noopener">Wikipedia</a> (listat ja nimien tiedot) 
-              </p>
-            </div>
-            <button class="primary" type="button" id="apply-filters">Hae nimet</button>
-          </div>
         </form>
       </section>
 
@@ -134,15 +133,10 @@
             <span id="match-context"></span>
             <div id="active-filters" class="filter-summary"></div>
           </div>
-          <div class="pagination-controls">
-            <button type="button" id="prev-page" disabled>←</button>
-            <button type="button" id="next-page" disabled>→</button>
-          </div>
         </div>
         <div id="results-list" class="name-list" aria-live="polite"></div>
-        <div class="pagination-controls bottom">
-          <button type="button" id="prev-page-bottom" disabled>←</button>
-          <button type="button" id="next-page-bottom" disabled>→</button>
+        <div class="load-more-row">
+          <button type="button" class="primary" id="load-more" disabled>Näytä lisää nimiä</button>
         </div>
       </section>
       <aside class="ad-rail" aria-label="Side ad placeholder">
@@ -153,13 +147,7 @@
     <template id="phonetic-filter-template">
       <div class="filter-row" data-id="">
         <select class="feature-select"></select>
-        <select class="mode-select">
-          <option value="include">Nimessä täytyy olla tämä piirre</option>
-          <option value="exclude">Poista nimet, joissa on tämä piirre</option>
-          <option value="min">Vähintään taso</option>
-          <option value="max">Enintään taso</option>
-        </select>
-        <select class="grade-select"></select>
+        <button type="button" class="ghost small tri-toggle mode-toggle" data-state="include">+</button>
         <button type="button" class="ghost small" data-action="remove">Poista</button>
       </div>
     </template>
@@ -167,10 +155,7 @@
     <template id="group-filter-template">
       <div class="filter-row" data-id="">
         <select class="group-select"></select>
-        <select class="group-mode-select">
-          <option value="include">Vain tällaiset nimet</option>
-          <option value="exclude">Poista tällaiset nimet</option>
-        </select>
+        <button type="button" class="ghost small tri-toggle group-mode-toggle" data-state="include">+</button>
         <button type="button" class="ghost small" data-action="remove">Poista</button>
       </div>
     </template>
@@ -218,5 +203,21 @@
     <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.0/dist/nouislider.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/wnumb@1.2.0/wNumb.min.js"></script>
     <script type="module" src="app.js"></script>
+
+    <div id="story-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="story-title" hidden>
+      <div class="modal-backdrop" data-action="dismiss-story"></div>
+      <div class="modal-panel story-panel">
+        <header class="modal-header">
+          <div>
+            <p class="eyebrow">Sivun tarina</p>
+            <h2 id="story-title">Mistä idea syntyi</h2>
+          </div>
+          <button type="button" class="icon-button" data-action="dismiss-story" aria-label="Sulje">x</button>
+        </header>
+        <p class="story-text">
+          Sivun kehitys alkoi syksyllä 2025 perheen esikoista odottaessa. Lapsen nimen pähkäily on yksi odotuksen mukavimmista asioista. Netin pitkiä nimilistoja selatessa keskittyminen kuitenkin alkoi herpaantua melko pian. Perheen insinööritaustainen isä totesi, että tämän voi tehdä paremmin, ja päätti toteuttaa Suomen parhaan nettisivun vauvan nimen valintaan.
+        </p>
+      </div>
+    </div>
   </body>
 </html>
