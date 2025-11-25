@@ -14,31 +14,29 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Merienda:wght@700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Mea+Culpa&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.0/dist/nouislider.min.css" />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
+  <body data-nav-label="Avaa suosikit" data-nav-href="favorites.html">
     <!-- Google Tag Manager (noscript) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-NJMD9WQQ"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- End Google Tag Manager (noscript) -->
-    <header class="page-header">
-      <div class="branding">
-        <!--<p class="eyebrow"></p>-->
-        <h1 class="hero-title">Nimi vauvalle</h1>
-        <p class="hero-subtitle">
-          Sivu auttaa sinua löytämään kaikista sopivimman nimen uudelle perheenjäsenellesi.
-          <button class="link-button" type="button" id="open-story">Sivun tarina</button>
-        </p>
-      </div>
-      <a class="ghost favorite-nav" href="favorites.html">Avaa suosikit</a>
-      <div class="ad-slot ad-top" aria-label="Main ad placeholder">Mainospaikka</div>
-    </header>
-
     <main class="layout">
+      <header class="page-header">
+        <a class="ghost favorite-nav" href="favorites.html">Avaa suosikit</a>
+        <div class="branding wide">
+          <!--<p class="eyebrow"></p>-->
+          <h1 class="hero-title">Nimi vauvalle</h1>
+          <p class="hero-subtitle">
+            Sivusto auttaa sinua löytämään kaikista sopivimman nimen uudelle perheenjäsenellesi.
+            <button class="link-button" type="button" id="open-story" data-action="open-story">Sivuston tarina</button>
+          </p>
+        </div>
+      </header>
       <section class="filters" aria-labelledby="filters-title">
         <h2 id="filters-title">Millaista nimeä etsit?</h2>
         <form id="filter-form">
@@ -55,8 +53,8 @@
                 Kirjoita vauvan sukunimi
                 <input type="text" id="surname-input" name="surname" placeholder="Esim. Korhonen" autocomplete="off" />
                 <span class="hint">
-                  Sukunimeä käytetään sopivien etunimien suositteluun. Sukunimeä ei tallenneta.  
-                  <button type="button" class="link-button" id="edit-weight-button">Säädä suosittelualgoritmia</button>
+                  Sivusto käyttää tekoälyä sopivien etunimien suositteluun. Sukunimeä ei tallenneta.  
+                  <button type="button" class="link-button" id="edit-weight-button">Säädä tekoälyä</button>
                 </span>
                 <div id="surname-analysis" class="hint surname-analysis"></div>
               </label>
@@ -139,10 +137,14 @@
           <button type="button" class="primary" id="load-more" disabled>Näytä lisää nimiä</button>
         </div>
       </section>
-      <aside class="ad-rail" aria-label="Side ad placeholder">
+      <aside class="ad-rail ad-rail-fixed" aria-label="Side ad placeholder">
+        <div class="ad-slot ad-rail-slot">Mainospaikka</div>
+      </aside>
+      <aside class="ad-rail ad-rail-scroll" aria-label="Side ad placeholder">
         <div class="ad-slot ad-rail-slot">Mainospaikka</div>
       </aside>
     </main>
+
 
     <template id="phonetic-filter-template">
       <div class="filter-row" data-id="">
@@ -176,8 +178,8 @@
       <div class="modal-panel">
         <header class="modal-header">
           <div>
-            <p class="eyebrow" id="weight-editor-eyebrow">Sukunimen painot</p>
-            <h2 id="weight-editor-title">Muokkaa pisteytyksen painoja</h2>
+            <p class="eyebrow" id="weight-editor-eyebrow">Tekoälyn painotukset</p>
+            <h2 id="weight-editor-title">Muokkaa tekoälyn painotuksia</h2>
           </div>
           <button type="button" class="icon-button" data-action="dismiss-weight-editor" aria-label="Sulje">x</button>
         </header>
@@ -190,7 +192,7 @@
             <div id="weight-editor-error" class="weight-editor-error" role="alert"></div>
           </div>
           <div class="weight-editor-actions">
-            <button type="button" class="ghost" data-action="reset-weight-editor">Palauta oletukset</button>
+            <button type="button" class="ghost" data-action="reset-weight-editor">Palauta oletuspainotukset</button>
             <span class="weight-editor-actions-spacer"></span>
             <button type="button" class="ghost" data-action="cancel-weight-editor">Peruuta</button>
             <button type="button" class="primary" id="weight-editor-save" data-action="save-weight-editor" disabled>OK</button>
@@ -209,13 +211,15 @@
       <div class="modal-panel story-panel">
         <header class="modal-header">
           <div>
-            <p class="eyebrow">Sivun tarina</p>
-            <h2 id="story-title">Mistä idea syntyi</h2>
+            <p class="eyebrow">Sivuston tarina</p>
+            <h2 id="story-title">Mistä sivuston idea syntyi?</h2>
           </div>
           <button type="button" class="icon-button" data-action="dismiss-story" aria-label="Sulje">x</button>
         </header>
         <p class="story-text">
-          Sivun kehitys alkoi syksyllä 2025 perheen esikoista odottaessa. Lapsen nimen pähkäily on yksi odotuksen mukavimmista asioista. Netin pitkiä nimilistoja selatessa keskittyminen kuitenkin alkoi herpaantua melko pian. Perheen insinööritaustainen isä totesi, että tämän voi tehdä paremmin, ja päätti toteuttaa Suomen parhaan nettisivun vauvan nimen valintaan.
+          Sivuston kehitys alkoi syksyllä 2025 perheen esikoista odottaessa. Lapsen nimen pähkäily on yksi raskausajan mukavimmista asioista. Netin pitkiä nimilistoja selatessa keskittyminen alkoi kuitenkin herpaantua melko pian. Perheen isä totesi, että tämän voi tehdä paremminkin, ja päätti toteuttaa Suomen parhaan nettisivun vauvan nimen valintaan.<br> <br>
+          Sivusto näyttää kulujen kattamiseksi kohtuullisen määrän mainoksia. Jos haluat tukea sivuston kehitystyötä enemmän, voit harkita ostavasi jotain sivuston vauva-arkeen liityvien kumppanuuslinkkien kautta.<br>
+          <p class="hint">Sivuston ylläpitäjä: <a class="ghost link-button" href="mailto:nimivauvalle@gmail.com">nimivauvalle@gmail.com</a></p>
         </p>
       </div>
     </div>

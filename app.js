@@ -1,9 +1,18 @@
+import { createCardShell } from './shared-cards.js';
+import { loadDataset } from './data-service.js';
+import { createDetailService } from './detail-service.js';
+import {
+  createAdTracker,
+  formatCount,
+  renderAgeDistributionChart,
+  renderGroupChips,
+  renderPhoneticSummary,
+  renderUsageChart,
+  fetchWikiSummary
+} from './detail-utils.js';
+import { FAVORITES_KEY, loadFavorites, saveFavorites } from './favorites-store.js';
+
 const PAGE_SIZE = 50;
-const DATA_FILES = [
-  'data/first-names.json',
-  'data/last-names.json',
-  'data/schema.json'
-];
 
 const translations = {
   fi: {
@@ -20,6 +29,7 @@ const translations = {
     matchLabel: 'Sukunimi-osuvuus',
     grade: (label) => `Taso: ${label}`,
     historyTitle: 'Nimen käyttö historiassa',
+    historyLinkText: 'linkki',
     historyLegendMale: 'Miehiä',
     historyLegendFemale: 'Naisia',
     historyYAxis: '%-osuus annetuista nimistä',
@@ -65,10 +75,10 @@ const translations = {
       population: 'Nimenhaltijat'
     },
     weightEditor: {
-      eyebrow: 'Sukunimen painot',
-      title: 'Muokkaa pisteytyksen painoja',
+      eyebrow: 'Tekoälyn käyttämät painotukset',
+      title: 'Muokkaa tekoälyn painotuksia',
       description:
-        'Jaa prosentit niin, että painojen itseisarvojen summa on aina 100 %. Negatiiviset prosentit pienentävät pisteitä. Esim. negatiivisilla prosenteilla kohdassa "Allitteraatio" algoritmi ei suosi nimiä, jotka alkavat samalla alkuikirjaimella kuin sukunimi.',
+        'Kerro tekoälylle, minkälaisia nimiä haluat sen suosittelevan. Korkeammat positiiviset prosentit kertovat tekoälylle, että tämä asia on sinulle tärkeä. Negatiiviset prosentit saavat sen välttelemään sellaisia nimiä, joissa kuvailtu asia on voimakas. Voit tarkistaa sivun alalaidasta, kuinka paljon prosentteja sinun pitää vielä lisätä tai vähentää.',
       total: (value) => `Käytössä ${value.toFixed(1)} % / 100 %`,
       balance: (value) =>
         value > 0
@@ -76,9 +86,9 @@ const translations = {
           : value < 0
             ? `Ylittää ${Math.abs(value).toFixed(1)} %`
             : 'Täsmälleen 100 % käytetty',
-      absRequirement: 'Painojen itseisarvot on käytettävä tasan 100 %:iin asti.',
+      absRequirement: 'Painot on käytettävä tasan 100 %:iin asti.',
       invalid: 'Täytä kaikki prosenttikentät numeroin.',
-      penaltyNote: 'Negatiivinen paino pienentää pisteitä.',
+      penaltyNote: 'Negatiiviset prosentit saavat tekoälyn välttelemään tällaisia nimiä',
       resetLabel: 'Palauta oletukset',
       cancelLabel: 'Peruuta',
       confirmLabel: 'OK'
@@ -117,13 +127,10 @@ let currentResults = [];
 let filteredOutResults = [];
 let orderedResults = [];
 let transitionConfig = null;
-let detailBasePath = 'data/details';
-let detailBucketMap = {};
-const detailCache = new Map();
+let detailService = null;
 const LETTER_LIMITS = { min: 1, max: 20 };
 const POPULATION_LIMITS = { min: 0, max: 45000 };
 let lettersRangeControl = null;
-const FAVORITES_KEY = 'favoriteNames';
 let favorites = new Set();
 let surnameInputTimer = null;
 let autoApplyTimer = null;
@@ -132,12 +139,19 @@ let weightEditorControls = null;
 let weightEditorInputs = [];
 let defaultMatchingWeights = null;
 const WEIGHT_SUM_TOLERANCE = 0.05;
-const FILTERED_BATCH_SIZE = 120;
 const DETAIL_AD_FREQUENCY = 3;
-let detailAdCounter = 0;
+const detailAds = createAdTracker(DETAIL_AD_FREQUENCY);
 let filterFeatureMeta = [];
+const expandedFilteredBlocks = new Set();
 
 const $ = (sel) => document.querySelector(sel);
+
+function getDisplayableCount() {
+  return orderedResults.reduce((acc, entry) => {
+    const hasGenderBlock = entry._filteredReasons?.some((r) => r.key === 'gender');
+    return hasGenderBlock ? acc : acc + 1;
+  }, 0);
+}
 
 function getTypedSurname() {
   return (state.surname || '').trim();
@@ -183,61 +197,61 @@ const MATCH_WEIGHT_FIELDS = [
     key: 'vowel_location',
     label: 'Vokaaliharmonia nimien välillä',
     description:
-      'Etu- (ä/ö/y) ja takavokaalipainotteisia (a/o/u) nimiä ei yhdistetä. Kieli on vokaaliäänteissä suun etu- tai takaosassa ja nopea kielen siirtymä on vaikea, esim. "pastöroida"'
+      'Tekoäly ei yhdistä etu- (ä/ö/y) ja takavokaalipainotteisia (a/o/u) nimiä. Kieli on vokaaliäänteissä suun etu- tai takaosassa ja nopea kielen siirtymä on vaikea, esim. Heta Äijälä on esimerkki nimestä, jossa kieli joutuu liikkumaan nopeasti suun etuosasta suun takaosaan.'
   },
   {
     key: 'vowel_openess',
     label: 'Vokaalien avaruuden erot',
     description:
-      'Väljiä (e/o/a) ja suppeita (i/u/y) vokaaleja sisältäviä nimiä ei yhdistetä. Kieli on vokaaliäänteissä suun ylä- tai alaosassa ja tämä vaikuttaa erityisesti sanojen korkeuteen, esim. "Ninni" ja "Anne". Erityisesti lyhyet, ainoastaan suppeita vokaaleja sisältävät nimiparit voivat kuulostaa liiankin korkeilta ja nopeilta.'
+      'Tekoäly ei yhdistä väljiä (e/o/a) ja suppeita (i/u/y) vokaaleja sisältäviä nimiä. Kieli on vokaaliäänteissä suun ylä- tai alaosassa ja tämä vaikuttaa erityisesti sanojen korkeuteen, esim. Ninni ja Anne lausutaan eri korkeuksilta.'
   },
   {
     key: 'softness',
     label: 'Konsonanttien pehmeys',
     description:
-      'Pehmeitä (m/n/l/r/j) ja kovia (p/t/k/b/d) konsonanttiäänteitä sisältäviä nimiä ei yhdistetä. Nimet, joissa on paljon pehmeitä konsonantteja, voivat kuulostaa lempeämmiltä verrattuna nimiin, joissa on enemmän kovia konsonantteja ja ristiriita voi kuulostaa oudolta.'
+      'Tekoäly ei yhdistä pehmeitä (m/n/l/r/j) ja kovia (p/t/k/b/d) konsonanttiäänteitä sisältäviä nimiä. Nimet, joissa on paljon pehmeitä konsonantteja, voivat kuulostaa lempeämmiltä verrattuna nimiin, joissa on enemmän kovia konsonantteja ja ristiriita voi kuulostaa oudolta. Esim. nimen Tapio Luoma etunimi kuulostaa kovalta, mutta sukunimi pehmeältä.'
   },
   {
     key: 'tone',
     label: 'Sävy (bouba/kiki -efekti)',
     description:
-      'Nimen sävy voi kuulostaa rauhalliselta ja lämpimältä (u/o/m/a/n) tai terävältä ja kovalta (k/t/s/p/i). Nimiä, joiden sävy on erilainen, ei yhdistetä.'
+      'Nimen sävy voi kuulostaa rauhalliselta ja lämpimältä (u/o/m/a/n) tai terävältä ja kovalta (k/t/s/p/i). Esim. nimen Mauno Sipilä etunimi kuulostaa rauhalliselta, mutta sukunimi on terävämpi. Tekoäly ei yhdistä nimiä, joista toinen on rauhallinen ja lämmin, ja toinen terävä ja kova'
   },
   {
     key: 'rhythm',
     label: 'Rytmi',
     description:
-      'Vertaa tavujen raskautta (R = raskas; jos tavussa on kaksi peräkkäistä vokaalia tai se päättyy konsonattiin, esim. "Aa"(-va) tai "Kris"(-ti-an)) ja keveyttä (K = kevyt: muussa tapauksessa). Mitä samankaltaisempi R/K-kuvio, sitä luontevampi yhdistelmä on. Esim. Kris-ti-an on RKR.'
+      'Tekoäly vertaa etu- ja sukunimien tavujen rytmiä. Tavut jaetaan raskaisiin (R = raskas, jos tavussa on kaksi peräkkäistä vokaalia tai se päättyy konsonattiin, esim. "Aa"(-va) tai "Kris"(-ti-an)) ja kevyisiin (K = kevyt, muussa tapauksessa). Mitä samankaltaisempi R/K-kuvio, sitä luontevampi yhdistelmä on. Esim. nimessä Kris-ti-an Vir-ta-nen sekä etu- että sukunimi ovat rytmiltään RKR.'
   },
   {
     key: 'length',
     label: 'Pituusero',
     description:
-      'Pitkä sukunimi ja lyhyt etunimi tasapainottavat toisiaan. Vastaavasti lyhyt sukunimi ja pitkä etunimi toimivat hyvin yhdessä. Liian pitkä pituusero voi kuitenkin kuulostaa epätasapainoiselta.'
+      'Tekoäly vertailee etu- ja sukunimen pituuksia. Pitkä sukunimi ja lyhyt etunimi tasapainottavat toisiaan. Vastaavasti lyhyt sukunimi ja pitkä etunimi toimivat hyvin yhdessä. Liian pitkä pituusero voi kuitenkin kuulostaa epätasapainoiselta.'
   },
   {
     key: 'alliteration',
     label: 'Allitteraatio',
     description:
-      'Nimiä, jotka päättyvät samaan kirjaimeen kuin millä sukunimi alkaa, suositellaan helpommin. "Vaka vanha väinämöinen" on esimerkki allitteraatiosta.'
+      'Tekoäly suosittelee helpommin nimiä, jotka päättyvät samaan kirjaimeen kuin millä sukunimi alkaa. Ville Virtanen on esimerkki tällaisesta nimestä. Tekoäly kutsuu tätä ilmiötä nimellä "allitteraatio"'
   },
   {
     key: 'junction',
     label: 'Etunimen lopun ja sukunimen alun vertailu',
     description:
-      'Jos etunimi päättyy samankaltaisiin äänteisiin, kuin millä sukunimi alkaa, nimiä suositellaan helpommin. "Iiro Roima" on esimerkki tällaisesta yhdistelmästä.'
+      'Jos etunimi päättyy samankaltaisiin äänteisiin, kuin millä sukunimi alkaa, tekoäly suosittelee tällaisia nimiä helpommin. Iiro Roima on esimerkki tällaisesta yhdistelmästä.'
   },
   {
     key: 'junction_transition',
-    label: 'Etunimen lopun ja sukunimen alun tilastollinen vertailu',
+    label: 'Etunimen lopun ja sukunimen alun vertailu',
     description:
-      'Tilastollinen malli etunimen viimeisen äänteen ja sukunimen ensimmäisen äänteen vertailuun. Malli on opetettu suomalaisilla nimillä vertailemalla nimien peräkkäisten äänteiden muodostamia pareja. Malli suosii sellaisia nimiyhdistelmiä, joiden äänteiden siirtymät ovat yleisiä myös suomalaisissa nimissä.'
+      'Tekoäly vertaa etunimen viimeistä ja sukunimen ensimmäistä äännettä. Se on opetellut suomalaisista nimistä, minkälaiset äänteet kuulostavat luonnollisilta, ja suosii mahdollisimman normaaleja nimiä.'
   },
   {
     key: 'head_transition',
-    label: 'Etu- ja sukunimen alkujen vertailu tilastollisella mallilla',
+    label: 'Etu- ja sukunimen alkujen vertailu',
     description:
-      'Tilastollinen malli etunimen ensimmäisen äänteen ja sukunimen ensimmäisen äänteen vertailuun. Malli on opetettu suomalaisilla nimillä vertailemalla peräkkäisten tavujen ensimmäisiä äänteitä. Malli suosii sellaisia nimiyhdistelmiä, joiden ensimmäisten äänteiden siirtymät ovat yleisiä myös suomalaisten nimien peräkkäisissä tavuissa.'
+      'Tekoäly vertaa etunimen ja sukunimen ensimmäisiä äänteitä. Se on opetellut suomalaisista nimistä, minkälaiset alkuäänteet kuulostavat luonnollisilta ja suosii mahdollisimman normaaleja nimiä.'
   },
   {
     key: 'oddness',
@@ -248,19 +262,7 @@ const MATCH_WEIGHT_FIELDS = [
 ];
 
 async function loadData() {
-  const responses = await Promise.all(DATA_FILES.map((path) => fetch(path)));
-  const payloads = [];
-  for (const response of responses) {
-    if (!response.ok) {
-      throw new Error('Failed to load data files');
-    }
-    payloads.push(await response.json());
-  }
-  return {
-    names: payloads[0].names,
-    surnames: payloads[1].names,
-    schema: payloads[2]
-  };
+  return loadDataset({ includeSurnames: true });
 }
 
 function initSelects() {
@@ -321,8 +323,7 @@ function buildMetaMaps() {
     surnameRankMap.set((entry.name || '').toLowerCase(), index + 1);
   });
   transitionConfig = data.schema.matching?.transitions || null;
-  detailBasePath = data.schema.details?.basePath || 'data/details';
-  detailBucketMap = data.schema.details?.buckets || {};
+  detailService = createDetailService(data.schema);
   filterFeatureMeta = data.schema.filterFeatures || [];
 }
 
@@ -358,48 +359,9 @@ function normalizeTransitionProbability(probability) {
   return clampSigned(normalized);
 }
 
-function getDetailPath(bucket) {
-  if (!bucket) return null;
-  if (detailBucketMap && detailBucketMap[bucket]) {
-    return detailBucketMap[bucket];
-  }
-  const normalizedBase = detailBasePath.replace(/\/+$/, '');
-  return `${normalizedBase}/${bucket}.json`;
-}
-
-function loadDetailBucket(bucket) {
-  if (!bucket) return Promise.resolve({});
-  if (detailCache.has(bucket)) {
-    return detailCache.get(bucket);
-  }
-  const path = getDetailPath(bucket);
-  const promise = (async () => {
-    const response = await fetch(path);
-    if (!response.ok) {
-      throw new Error('Failed to load detail chunk');
-    }
-    const payload = await response.json();
-    return payload.entries || {};
-  })().catch((error) => {
-    detailCache.delete(bucket);
-    throw error;
-  });
-  detailCache.set(bucket, promise);
-  return promise;
-}
-
-async function ensureEntryDetails(entry) {
-  if (!entry || entry._detailsLoaded) {
-    return entry;
-  }
-  const bucket = entry.detailBucket || (entry.name ? entry.name[0] : 'misc');
-  const detailEntries = await loadDetailBucket(bucket);
-  const detail = detailEntries?.[entry.name];
-  if (detail) {
-    Object.assign(entry, detail);
-  }
-  entry._detailsLoaded = true;
-  return entry;
+function ensureEntryDetails(entry) {
+  if (!detailService) return Promise.resolve(entry);
+  return detailService.ensureEntryDetails(entry);
 }
 
 function normalizeLetterFilter(value) {
@@ -407,22 +369,6 @@ function normalizeLetterFilter(value) {
   return value
     .toLowerCase()
     .replace(/[^a-zåäöæøœšžẞ\u00c0-\u017f\-]/g, '');
-}
-
-function loadFavoritesFromStorage() {
-  try {
-    const raw = localStorage.getItem(FAVORITES_KEY);
-    if (!raw) return new Set();
-    const arr = JSON.parse(raw);
-    return new Set(arr.filter(Boolean));
-  } catch {
-    return new Set();
-  }
-}
-
-function saveFavoritesToStorage(set) {
-  const arr = Array.from(set);
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify(arr));
 }
 
 function isFavoriteName(name) {
@@ -437,7 +383,7 @@ function toggleFavoriteName(entry) {
   } else {
     favorites.add(key);
   }
-  saveFavoritesToStorage(favorites);
+  saveFavorites(favorites, FAVORITES_KEY);
 }
 
 function normalizeRangeValues(minValue, maxValue, limits) {
@@ -578,6 +524,14 @@ function restoreFromQuery() {
       mode: normalizedMode
     };
   });
+
+  if (params.has('w')) {
+    const parsedWeights = parseWeightOverrides(params.get('w'));
+    if (Object.keys(parsedWeights).length) {
+      state.weightOverrides = parsedWeights;
+      weightPercentBudget = computeAbsoluteWeightBudget(parsedWeights) || weightPercentBudget;
+    }
+  }
 }
 
 function applySchemaLimits() {
@@ -796,17 +750,17 @@ function renderPopularityFilters() {
     {
       label: 'Suosion huipulla',
       prefix: 'trend_',
-      desc: 'Valitse jakso, jolla nimi on ollut huipulla.'
+      desc: 'Nimet, joiden suosio on ollut huipussaan kyseisellä vuosikymmenellä.'
     },
     {
       label: 'Kasvattanut suosiota',
       prefix: 'growth_',
-      desc: 'Valitse jakso, jossa suosio on kasvanut edelliseen nähden.'
+      desc: 'Nimet, joiden suosio on kasvanut edelliseltä vuosikymmeneltä.'
     },
     {
       label: 'Suosittu',
       prefix: 'popular_',
-      desc: 'Valitse ajanjaksojen Top 100 -nimet.'
+      desc: 'Kunkin vuosikymmenen 100 suosituinta nimeä'
     }
   ];
   const createSelect = (prefix) => {
@@ -1425,6 +1379,26 @@ function computeAbsoluteWeightBudget(weights) {
   return total > 0 ? total : 1;
 }
 
+function serializeWeightOverrides(overrides) {
+  if (!overrides || typeof overrides !== 'object') return '';
+  return Object.entries(overrides)
+    .map(([key, value]) => `${key}:${Number(value).toFixed(4)}`)
+    .join(',');
+}
+
+function parseWeightOverrides(value) {
+  if (!value) return {};
+  const result = {};
+  value.split(',').forEach((pair) => {
+    const [key, raw] = pair.split(':');
+    if (!key) return;
+    const num = Number(raw);
+    if (!Number.isFinite(num)) return;
+    result[key] = num;
+  });
+  return normalizeWeightMap(result);
+}
+
 function normalizeWeightMap(weights) {
   if (!weights) return {};
   const entries = Object.entries(weights);
@@ -1920,92 +1894,21 @@ function renderActiveFilters() {
 }
 
 function createNameCard(entry, t, surnameEntry, { filtered = false } = {}) {
-  const card = document.createElement('details');
-  card.className = 'name-card';
-  if (filtered) {
-    card.classList.add('filtered-out');
-  }
-  const summary = document.createElement('summary');
-  const popularitySuffix = 'hlöä';
-  const tagsWrap = document.createElement('div');
-  tagsWrap.className = 'summary-tags';
-
-  const titleSpan = document.createElement('span');
-  titleSpan.className = 'name-title';
-  titleSpan.textContent = entry.display;
-  summary.appendChild(titleSpan);
-
-  const popTag = createSummaryTag(
-    `${entry.popularity.total.toLocaleString('fi-FI')} ${popularitySuffix}`,
-    'tag-pop'
-  );
-  tagsWrap.appendChild(popTag);
-
-  if (entry.topRank && entry.topRank.rank && entry.topRank.rank <= 500) {
-    const rankText = `#${entry.topRank.rank} suosituin nimi`;
-    const rankClass = entry.topRank.gender === 'female' ? 'tag-rank-female' : 'tag-rank-male';
-    tagsWrap.appendChild(createSummaryTag(rankText, rankClass));
-  }
-
-  const matchText = entry._match !== null ? `${t.matchLabel}: ${(entry._match * 100).toFixed(1)}%` : '';
-  tagsWrap.appendChild(createSummaryTag(matchText, 'tag-match'));
-
-  let comboText = '';
-  if (entry._comboEstimate && surnameEntry) {
-    comboText = t.comboTag(formatCount(entry._comboEstimate));
-  }
-  tagsWrap.appendChild(createSummaryTag(comboText, 'tag-combo'));
-
-  if (filtered && Array.isArray(entry._filteredReasons)) {
-    entry._filteredReasons.slice(0, 3).forEach((reason) => {
-      tagsWrap.appendChild(createSummaryTag(reason.text || reason, 'reason'));
-    });
-  }
-
-  summary.appendChild(tagsWrap);
-  const favoriteBtn = createFavoriteButton(entry);
-  summary.appendChild(favoriteBtn);
-  card.appendChild(summary);
-
-  const body = document.createElement('div');
-  body.className = 'name-card-body';
-  card.appendChild(body);
-
-  card.addEventListener('toggle', () => {
-    if (card.open) {
-      loadCardDetails(card, body, entry, t, surnameEntry);
-    }
+  return createCardShell(entry, {
+    t,
+    surnameEntry,
+    filtered,
+    isFavorite: () => isFavoriteName(entry.name),
+    toggleFavorite: toggleFavoriteName,
+    onOpen: (detailsEl, bodyEl) => loadCardDetails(detailsEl, bodyEl, entry, t, surnameEntry)
   });
-  return card;
-}
-
-function createFavoriteButton(entry) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'favorite-btn';
-  btn.title = 'Lisää suosikkeihin';
-  const setState = () => {
-    const fav = isFavoriteName(entry.name);
-    btn.textContent = fav ? '★' : '☆';
-    btn.classList.toggle('active', fav);
-    btn.title = fav ? 'Poista suosikeista' : 'Lisää suosikkeihin';
-  };
-  setState();
-  btn.addEventListener('click', (event) => {
-    event.stopPropagation();
-    toggleFavoriteName(entry);
-    setState();
-  });
-  return btn;
 }
 
 function shouldShowDetailAd() {
-  detailAdCounter += 1;
-  if (DETAIL_AD_FREQUENCY <= 0) return false;
-  return detailAdCounter % DETAIL_AD_FREQUENCY === 0;
+  return detailAds.shouldShow();
 }
 
-function createFilteredGroupPlaceholder(filteredEntries, t, surnameEntry) {
+function createFilteredGroupPlaceholder(filteredEntries, t, surnameEntry, blockId) {
   const wrapper = document.createElement('div');
   wrapper.className = 'filtered-divider';
   if (!filteredEntries.length) {
@@ -2030,41 +1933,8 @@ function createFilteredGroupPlaceholder(filteredEntries, t, surnameEntry) {
   button.className = 'ghost small filtered-toggle';
   button.textContent = `${filteredEntries.length} nimeä suodatettu, klikkaa näyttääksesi`;
   button.addEventListener('click', () => {
-    const expanded = document.createElement('div');
-    expanded.className = 'filtered-expanded';
-    const collapseTop = createCollapseButton(filteredEntries, t, surnameEntry, expanded);
-    expanded.appendChild(collapseTop);
-    let offset = 0;
-    const listContainer = document.createElement('div');
-    listContainer.className = 'filtered-chunk';
-    expanded.appendChild(listContainer);
-    const moreBtn = document.createElement('button');
-    moreBtn.type = 'button';
-    moreBtn.className = 'ghost small filtered-toggle';
-    moreBtn.textContent = 'Näytä lisää suodatettuja';
-    const appendChunk = () => {
-      const end = Math.min(offset + FILTERED_BATCH_SIZE, filteredEntries.length);
-      const slice = filteredEntries.slice(offset, end);
-      slice.forEach((entry) => {
-        const card = createNameCard(entry, t, surnameEntry, { filtered: true });
-        listContainer.appendChild(card);
-      });
-      offset = end;
-      if (offset >= filteredEntries.length) {
-        moreBtn.hidden = true;
-      } else {
-        const remaining = filteredEntries.length - offset;
-        moreBtn.textContent = `Näytä lisää (${remaining})`;
-      }
-    };
-    appendChunk();
-    if (filteredEntries.length > offset) {
-      moreBtn.addEventListener('click', appendChunk);
-      expanded.appendChild(moreBtn);
-    }
-    const collapseBottom = createCollapseButton(filteredEntries, t, surnameEntry, expanded);
-    expanded.appendChild(collapseBottom);
-    wrapper.replaceWith(expanded);
+    expandedFilteredBlocks.add(blockId);
+    renderResults();
   });
   wrapper.appendChild(button);
   const bottomLine = document.createElement('div');
@@ -2073,56 +1943,116 @@ function createFilteredGroupPlaceholder(filteredEntries, t, surnameEntry) {
   return wrapper;
 }
 
-function createCollapseButton(filteredEntries, t, surnameEntry, containerEl) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'ghost small filtered-toggle';
-  btn.textContent = 'Piilota suodatetut nimet';
-  btn.addEventListener('click', () => {
-    containerEl.replaceWith(createFilteredGroupPlaceholder(filteredEntries, t, surnameEntry));
-  });
-  return btn;
+function createExpandedFilteredGroup(filteredEntries, t, surnameEntry, blockId) {
+  const expanded = document.createElement('div');
+  expanded.className = 'filtered-expanded';
+  const makeCollapse = () => {
+    const collapse = document.createElement('button');
+    collapse.type = 'button';
+    collapse.className = 'ghost small filtered-toggle';
+    collapse.textContent = 'Piilota suodatetut nimet';
+    collapse.addEventListener('click', () => {
+      expandedFilteredBlocks.delete(blockId);
+      renderResults();
+    });
+    return collapse;
+  };
+  expanded.appendChild(makeCollapse());
+
+  const listContainer = document.createElement('div');
+  listContainer.className = 'filtered-chunk';
+  expanded.appendChild(listContainer);
+  expanded.appendChild(makeCollapse());
+
+  return { expanded, listContainer };
 }
 
 function renderResults() {
   const t = translations.fi;
   const list = $('#results-list');
   const { surnameEntry, missingSurname } = state.matchInfo;
-  const total = currentResults.length;
+  const totalAvailable = getDisplayableCount();
   list.innerHTML = '';
   let renderedCount = 0;
-  if (!total) {
+  let usedSlots = 0;
+  let filteredBlockCounter = 0;
+  const activeBlockIds = new Set();
+  let hitVisibleLimit = false;
+  if (!totalAvailable) {
     list.innerHTML = `<p class="hint">${t.noResults}</p>`;
   } else {
-    let allowedRendered = 0;
     let filteredBuffer = [];
+    let bufferStartIndex = null;
     const flushFilteredBuffer = () => {
       if (!filteredBuffer.length) return;
-      const placeholder = createFilteredGroupPlaceholder(filteredBuffer, t, surnameEntry);
-      list.appendChild(placeholder);
+      const blockId = `filtered-${bufferStartIndex ?? filteredBlockCounter}`;
+      filteredBlockCounter += 1;
+      activeBlockIds.add(blockId);
+      const isExpanded = expandedFilteredBlocks.has(blockId);
+      if (isExpanded) {
+        const { expanded, listContainer } = createExpandedFilteredGroup(
+          filteredBuffer,
+          t,
+          surnameEntry,
+          blockId
+        );
+        list.appendChild(expanded);
+        for (const entry of filteredBuffer) {
+          if (usedSlots >= state.visibleCount) {
+            hitVisibleLimit = true;
+            break;
+          }
+          const card = createNameCard(entry, t, surnameEntry, { filtered: true });
+          listContainer.appendChild(card);
+          usedSlots += 1;
+          renderedCount += 1;
+        }
+      } else {
+        const placeholder = createFilteredGroupPlaceholder(filteredBuffer, t, surnameEntry, blockId);
+        list.appendChild(placeholder);
+      }
       filteredBuffer = [];
+      bufferStartIndex = null;
     };
-    for (const entry of orderedResults) {
-      if (allowedRendered >= state.visibleCount) break;
+    for (let idx = 0; idx < orderedResults.length; idx += 1) {
+      if ((usedSlots >= state.visibleCount && filteredBuffer.length === 0) || hitVisibleLimit) {
+        break;
+      }
+      const entry = orderedResults[idx];
       const isFiltered = entry._filteredReasons?.length;
       const hasGenderBlock = entry._filteredReasons?.some((r) => r.key === 'gender');
       if (isFiltered) {
         if (hasGenderBlock) {
           continue;
         }
+        if (!filteredBuffer.length) {
+          bufferStartIndex = idx;
+        }
         filteredBuffer.push(entry);
         continue;
       }
       flushFilteredBuffer();
+      if (hitVisibleLimit || usedSlots >= state.visibleCount) {
+        break;
+      }
       const card = createNameCard(entry, t, surnameEntry, { filtered: false });
       list.appendChild(card);
-      allowedRendered += 1;
+      usedSlots += 1;
       renderedCount += 1;
     }
-    flushFilteredBuffer();
+    if (!hitVisibleLimit) {
+      flushFilteredBuffer();
+    }
   }
-  const shownCount = renderedCount;
-  $('#result-count').textContent = total ? t.results(1, shownCount, total) : t.noResults;
+  Array.from(expandedFilteredBlocks).forEach((id) => {
+    if (!activeBlockIds.has(id)) {
+      expandedFilteredBlocks.delete(id);
+    }
+  });
+  const shownCount = Math.min(usedSlots, totalAvailable);
+  $('#result-count').textContent = totalAvailable
+    ? t.results(1, shownCount, totalAvailable)
+    : t.noResults;
   const typedSurname = getTypedSurname();
   const surnameLabel = typedSurname || state.surname || '';
   $('#match-context').textContent = missingSurname
@@ -2131,15 +2061,23 @@ function renderResults() {
   renderActiveFilters();
   const loadMoreBtn = $('#load-more');
   if (loadMoreBtn) {
-    loadMoreBtn.disabled = shownCount >= total;
-    loadMoreBtn.hidden = !total || shownCount >= total;
+    const hasMore = shownCount < totalAvailable;
+    loadMoreBtn.disabled = !hasMore;
+    loadMoreBtn.hidden = totalAvailable === 0;
+    loadMoreBtn.textContent = hasMore ? 'Näytä lisää nimiä' : 'Ei enempää nimiä';
   }
 }
 
 function loadCardDetails(card, bodyContainer, entry, t, surnameEntry) {
   if (card.dataset.hydrated === 'true') {
     if (card._detailRefs?.wikiBlock) {
-      fetchWikiSummary(entry, card._detailRefs.wikiBlock, t);
+      fetchWikiSummary(entry, card._detailRefs.wikiBlock, {
+        loadingText: t.wikiLoading,
+        unavailableText: t.wikiUnavailable,
+        title: t.wikiTitle,
+        includeLink: true,
+        linkLabel: 'Wikipedia'
+      });
     }
     return;
   }
@@ -2153,7 +2091,13 @@ function loadCardDetails(card, bodyContainer, entry, t, surnameEntry) {
       card.dataset.loading = 'false';
       const refs = hydrateCardBody(card, bodyContainer, entry, t, surnameEntry);
       if (refs?.wikiBlock) {
-        fetchWikiSummary(entry, refs.wikiBlock, t);
+        fetchWikiSummary(entry, refs.wikiBlock, {
+          loadingText: t.wikiLoading,
+          unavailableText: t.wikiUnavailable,
+          title: t.wikiTitle,
+          includeLink: true,
+          linkLabel: 'Wikipedia'
+        });
       }
     })
     .catch(() => {
@@ -2195,7 +2139,8 @@ function hydrateCardBody(card, container, entry, t, surnameEntry) {
   const historyChart = document.createElement('div');
   historyChart.className = 'plotly-chart';
   historyContent.appendChild(historyChart);
-  const historyRow = createDetailRow(t.historyTitle, historyContent);
+  const historyLabel = createHistoryLabel(entry, t);
+  const historyRow = createDetailRow(historyLabel, historyContent, { asHtml: true });
   if (historyRow) {
     historyRow.classList.add('chart-row');
     details.appendChild(historyRow);
@@ -2230,204 +2175,22 @@ function hydrateCardBody(card, container, entry, t, surnameEntry) {
   container.appendChild(affiliateLink);
 
   const historyContainer = historyChart;
-  renderUsageChart(historyContainer, entry.history, t, entry.display);
+  renderUsageChart(historyContainer, entry.history, {
+    noData: t.historyNoData,
+    legendMale: t.historyLegendMale,
+    legendFemale: t.historyLegendFemale,
+    yAxis: t.historyYAxis
+  });
   const ageContainer = ageChart;
-  renderAgeDistributionChart(ageContainer, entry.population, entry.popularity.total, t);
+  renderAgeDistributionChart(ageContainer, entry.population, entry.popularity.total, {
+    noData: t.ageDistributionNoData,
+    yAxis: t.ageDistributionYAxis
+  });
 
   card.dataset.hydrated = 'true';
   const refs = { wikiBlock, historyContainer, ageContainer };
   card._detailRefs = refs;
   return refs;
-}
-
-function renderUsageChart(container, history, t, entryName = '') {
-  if (!container) return;
-  const plotly = window.Plotly;
-  if (!plotly) {
-    container.textContent = t.historyNoData;
-    return;
-  }
-  const periods = history?.periods || [];
-  if (!periods.length) {
-    container.textContent = t.historyNoData;
-    return;
-  }
-  const datasets = [
-    { label: t.historyLegendMale, color: '#0b57d0', data: history.male || {} },
-    { label: t.historyLegendFemale, color: '#c2185b', data: history.female || {} }
-  ].map((series) => {
-    const share = periods.map((_, idx) => Number(series.data.share?.[idx]) || 0);
-    const counts = periods.map((_, idx) => Number(series.data.counts?.[idx]) || 0);
-    const ranks = periods.map((_, idx) =>
-      Array.isArray(series.data.rank) && Number.isFinite(series.data.rank[idx])
-        ? series.data.rank[idx]
-        : null
-    );
-    const hoverText = periods.map((period, idx) => {
-      const count = formatCount(counts[idx]);
-      const rank = ranks[idx] ? ` (#${ranks[idx]})` : '';
-      return `${series.label} - ${period}: ${count} (${formatPercent(share[idx])})${rank}`;
-    });
-    return { share, counts, ranks, hoverText, color: series.color, label: series.label };
-  });
-  const hasData = datasets.some((dataset) => dataset.share.some((value) => value > 0));
-  if (!hasData) {
-    container.textContent = t.historyNoData;
-    return;
-  }
-  const nimipalveluLink = entryName
-    ? `<a href="https://nimipalvelu.dvv.fi/etunimihaku?nimi=${encodeURIComponent(entryName)}" target="_blank" rel="noopener">linkki</a>`
-    : '';
-  if (nimipalveluLink) {
-    const linkEl = document.createElement('div');
-    linkEl.className = 'history-link';
-    linkEl.innerHTML = `${t.historyTitle} (${nimipalveluLink})`;
-    container.parentElement?.insertBefore(linkEl, container);
-  }
-  const hoverEnabled = !window.matchMedia('(hover: none)').matches;
-  const traces = datasets.map((dataset) => ({
-    x: periods,
-    y: dataset.share.map((value) => value * 100),
-    text: dataset.hoverText,
-    hoverinfo: hoverEnabled ? 'text' : 'skip',
-    mode: 'lines+markers',
-    line: { color: dataset.color, width: 2 },
-    marker: { size: 6 },
-    name: dataset.label
-  }));
-  const layout = {
-    margin: { l: 50, r: 10, t: 10, b: 60 },
-    height: 260,
-    paper_bgcolor: 'rgba(0,0,0,0)',
-    plot_bgcolor: 'rgba(0,0,0,0)',
-    dragmode: false,
-    hovermode: hoverEnabled ? 'closest' : false,
-    xaxis: {
-      title: '',
-      tickmode: 'array',
-      tickvals: periods,
-      ticktext: periods.map((period) => period.replace('-', '-')),
-      tickangle: -45,
-      automargin: true
-    },
-    yaxis: {
-      title: { text: t.historyYAxis, standoff: 20 },
-      ticksuffix: '%',
-      zeroline: false,
-      automargin: true
-    },
-    legend: { orientation: 'h', x: 0, y: 1.1, yanchor: 'bottom' },
-    font: { family: 'inherit' }
-  };
-  plotly.react(container, traces, layout, {
-    displayModeBar: false,
-    responsive: true,
-    scrollZoom: false,
-    doubleClick: 'reset',
-    editable: false,
-    staticPlot: !hoverEnabled,
-    displaylogo: false,
-    modeBarButtonsToRemove: ['zoom2d', 'pan2d', 'select2d', 'lasso2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', 'hoverClosestCartesian', 'hoverCompareCartesian'],
-    config: {
-      doubleClick: false,
-      scrollZoom: false,
-      responsive: true,
-      editable: false,
-      staticPlot: !hoverEnabled
-    }
-  });
-}
-
-function renderAgeDistributionChart(container, population, targetTotal, t) {
-  if (!container) return;
-  const plotly = window.Plotly;
-  if (!plotly) {
-    container.textContent = t.ageDistributionNoData;
-    return;
-  }
-  const rawData = population?.ageDistribution || [];
-  if (!rawData.length) {
-    container.textContent = t.ageDistributionNoData;
-    return;
-  }
-  const parseAgeStart = (label) => {
-    if (!label) return null;
-    const match = label.match(/\d+/);
-    return match ? parseInt(match[0], 10) : null;
-  };
-  const resolveBucket = (label) => {
-    const start = parseAgeStart(label);
-    if (start !== null && start >= 95) {
-      return '95+';
-    }
-    return label || '';
-  };
-  const bucketOrder = [];
-  const bucketMap = new Map();
-  rawData.forEach((row) => {
-    const baseLabel = row.ageRange || row.period || '';
-    const bucket = resolveBucket(baseLabel);
-    if (!bucketMap.has(bucket)) {
-      bucketMap.set(bucket, { label: bucket, total: 0 });
-      bucketOrder.push(bucket);
-    }
-    const male = typeof row.maleCount === 'number' ? row.maleCount : 0;
-    const female = typeof row.femaleCount === 'number' ? row.femaleCount : 0;
-    const totalRow =
-      typeof row.totalCount === 'number' ? row.totalCount : male + female;
-    bucketMap.get(bucket).total += totalRow;
-  });
-  const aggregatedRows = bucketOrder.map((bucket) => bucketMap.get(bucket));
-  const x = aggregatedRows.map((row) => row.label);
-  const totals = aggregatedRows.map((row) => row.total);
-  const sumTotals = totals.reduce((acc, value) => acc + value, 0);
-  const desiredTotal = Number.isFinite(targetTotal) && targetTotal > 0 ? targetTotal : sumTotals;
-  const scale = sumTotals > 0 ? desiredTotal / sumTotals : 0;
-  const scaledTotals = totals.map((value) => value * scale);
-  const unit = 'hlöä';
-  const hoverTexts = aggregatedRows.map((row, idx) => {
-    const amount = scaledTotals[idx] || 0;
-    return `${row.label}: ${formatCount(amount)} ${unit}`;
-  });
-  const trace = {
-    type: 'bar',
-    x,
-    y: scaledTotals,
-    hovertext: hoverTexts,
-    hoverinfo: 'text',
-    marker: { color: '#4a67ff' },
-    cliponaxis: false,
-    width: 0.55
-  };
-  const layout = {
-    margin: { l: 55, r: 10, t: 10, b: 60 },
-    height: 260,
-    paper_bgcolor: 'rgba(0,0,0,0)',
-    plot_bgcolor: 'rgba(0,0,0,0)',
-    xaxis: { title: '', tickangle: -45, automargin: true },
-    yaxis: {
-      title: { text: t.ageDistributionYAxis, standoff: 20 },
-      ticksuffix: '',
-      separatethousands: true,
-      zeroline: false,
-      automargin: true
-    },
-    font: { family: 'inherit' }
-  };
-  plotly.react(container, [trace], layout, {
-    displayModeBar: false,
-    responsive: true,
-    staticPlot: true,
-    scrollZoom: false
-  });
-}
-
-function formatCount(value) {
-  if (value == null || Number.isNaN(value)) {
-    return '-';
-  }
-  const rounded = Math.round(value);
-  return rounded.toLocaleString('fi-FI');
 }
 
 function formatPercent(value) {
@@ -2801,11 +2564,6 @@ function getFeatureDescriptionByMeta(meta) {
   return meta.description || '';
 }
 
-function escapeHtml(value) {
-  if (!value) return '';
-  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-}
-
 function updateSurnameAnalysis(entry, missingSurname) {
   const container = $('#surname-analysis');
   if (!container) return;
@@ -2890,13 +2648,26 @@ function buildFirstNameAnalysis(entry, surnameEntry) {
   return container.childNodes.length ? container : null;
 }
 
-function createDetailRow(label, content) {
+function createHistoryLabel(entry, t) {
+  const base = t.historyTitle || 'Nimen käyttö historiassa';
+  const name = entry?.display || entry?.name || '';
+  if (!name) return base;
+  const linkText = t.historyLinkText || 'linkki';
+  const url = `https://nimipalvelu.dvv.fi/etunimihaku?nimi=${encodeURIComponent(name)}`;
+  return `${base} (<a href="${url}" target="_blank" rel="noopener">${linkText}</a>)`;
+}
+
+function createDetailRow(label, content, options = {}) {
   if (!content) return null;
   const row = document.createElement('div');
   row.className = 'detail-row';
   const labelEl = document.createElement('div');
   labelEl.className = 'detail-label';
-  labelEl.textContent = label;
+  if (options.asHtml) {
+    labelEl.innerHTML = label;
+  } else {
+    labelEl.textContent = label;
+  }
   const contentEl = document.createElement('div');
   contentEl.className = 'detail-content';
   if (typeof content === 'string') {
@@ -2911,44 +2682,8 @@ function createDetailRow(label, content) {
   return row;
 }
 
-function createSummaryTag(text, extraClass) {
-  const span = document.createElement('span');
-  span.className = `tag ${extraClass || ''}`.trim();
-  if (!text) {
-    span.classList.add('tag-empty');
-    span.innerHTML = '&nbsp;';
-  } else {
-    span.textContent = text;
-  }
-  return span;
-}
-
-function createAdPlaceholder(position = 'inline') {
-  const slot = document.createElement('div');
-  slot.className = `ad-slot ad-${position}`;
-  slot.setAttribute('aria-label', 'Mainospaikka');
-  slot.textContent = 'Mainospaikka';
-  return slot;
-}
-
 function resetDetailAdCounter() {
-  detailAdCounter = 0;
-}
-
-function renderPronunciation(entry) {
-  if (!entry.ipa) return '';
-  const languages = [
-    { key: 'fi', label: 'fi' },
-    { key: 'sv', label: 'sv' },
-    { key: 'en', label: 'en' }
-  ];
-  const spans = languages
-    .map(({ key, label }) => {
-      const value = entry.ipa[key] || '-';
-      return `<span>${label}: ${escapeHtml(String(value))}</span>`;
-    })
-    .join('');
-  return `<div class="pronunciation-values">${spans}</div>`;
+  detailAds.reset();
 }
 
 function renderComboEstimate(entry, t, surnameEntry) {
@@ -2959,104 +2694,18 @@ function renderComboEstimate(entry, t, surnameEntry) {
   return `~${countText} (${t.comboRowNote})`;
 }
 
-function renderGroupChips(entry, t) {
-  if (!entry.groups || !entry.groups.length) {
-    return `<span class="chip">${t.noGroupMembership}</span>`;
-  }
-  const visibleGroups = entry.groups.filter((key) => groupMeta.has(key));
-  if (!visibleGroups.length) {
-    return `<span class="chip">${t.noGroupMembership}</span>`;
-  }
-  return visibleGroups
-    .map((key) => {
-      const meta = groupMeta.get(key);
-      const label = getGroupLabel(meta) || key;
-      const desc = escapeHtml(meta?.description || meta?.label || label);
-      return `<span class="chip" title="${desc}">${label}</span>`;
-    })
-    .join('');
-}
-
-function renderPhoneticSummary(entry, t) {
-  const seen = new Set();
-  const features = [];
-  Object.entries(entry.phonetic).forEach(([key, data]) => {
-    if (!phoneticMeta.has(key)) return;
-    const include = data.value || (data.grade ?? 0) >= 2;
-    if (!include) return;
-    if (seen.has(key)) return;
-    seen.add(key);
-    features.push({
-      key,
-      label: getFeatureLabel(phoneticMeta.get(key)) || key,
-      desc: getFeatureDescription(key)
-    });
-  });
-  if (!features.length) {
-    return `<span>${t.noPhoneticHighlights}</span>`;
-  }
-  return features
-    .slice(0, 8)
-    .map(
-      (feature) =>
-        `<span class="chip" title="${escapeHtml(feature.desc)}">${escapeHtml(feature.label)}</span>`
-    )
-    .join('');
-}
-
 function renderCombinedTraits(entry, t) {
-  const groupHtml = renderGroupChips(entry, t);
-  const phoneticHtml = renderPhoneticSummary(entry, t);
+  const groupHtml = renderGroupChips(entry, groupMeta, {
+    emptyLabel: t.noGroupMembership,
+    labelFor: (meta) => getGroupLabel(meta) || meta?.key,
+    describe: (meta) => meta?.description || meta?.label || ''
+  });
+  const phoneticHtml = renderPhoneticSummary(entry, phoneticMeta, {
+    noHighlightsLabel: t.noPhoneticHighlights,
+    labelFor: (meta) => getFeatureLabel(meta) || meta?.key,
+    describe: (meta) => getFeatureDescription(meta?.key || '')
+  });
   return `${groupHtml} ${phoneticHtml}`;
-}
-
-function fetchWikiSummary(entry, container, t) {
-  if (!container || container.dataset.status === 'loading' || container.dataset.status === 'done') {
-    return;
-  }
-  container.dataset.status = 'loading';
-  container.textContent = t.wikiLoading;
-  const candidates = [`${entry.display}_(etunimi)`,`${entry.display}_(nimi)`, entry.display];
-
-  const attempt = (idx) => {
-    if (idx >= candidates.length) {
-      container.textContent = t.wikiUnavailable;
-      container.dataset.status = 'done';
-      return;
-    }
-    const title = encodeURIComponent(candidates[idx]);
-    const url = `https://fi.wikipedia.org/w/api.php?action=query&prop=extracts&exintro&explaintext&titles=${title}&format=json&origin=*`;
-    fetch(url)
-      .then((response) => {
-        if (!response.ok) throw new Error('Not found');
-        return response.json();
-      })
-      .then((data) => {
-        const extract = extractWikiText(data);
-        if (!extract) {
-          attempt(idx + 1);
-          return;
-        }
-        const wikiUrl = `https://fi.wikipedia.org/wiki/${candidates[idx]}`;
-        container.innerHTML = `<strong>${t.wikiTitle} (<a href="${wikiUrl}" target="_blank" rel="noopener">Wikipedia</a>):</strong> ${escapeHtml(extract)}`;
-        container.dataset.status = 'done';
-      })
-      .catch(() => attempt(idx + 1));
-  };
-
-  attempt(0);
-}
-
-function extractWikiText(payload) {
-  if (!payload || !payload.query || !payload.query.pages) {
-    return '';
-  }
-  const pages = payload.query.pages;
-  const firstKey = Object.keys(pages)[0];
-  if (!firstKey) return '';
-  const page = pages[firstKey];
-  if (!page || page.missing) return '';
-  return page.extract || '';
 }
 
 function updateUrl() {
@@ -3092,6 +2741,9 @@ function updateUrl() {
     const modeValue = filter.mode === 'exclude' ? 'exclude' : 'include';
     params.append('gf', `${filter.group}.${modeValue}`);
   });
+  if (state.weightOverrides) {
+    params.set('w', serializeWeightOverrides(state.weightOverrides));
+  }
   const query = params.toString();
   const newUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
   history.replaceState(null, '', newUrl);
@@ -3139,14 +2791,14 @@ function bindEvents() {
   const loadMoreBtn = $('#load-more');
   if (loadMoreBtn) {
     loadMoreBtn.addEventListener('click', () => {
-      state.visibleCount = Math.min(state.visibleCount + PAGE_SIZE, currentResults.length);
+      const totalAvailable = getDisplayableCount();
+      state.visibleCount = Math.min(state.visibleCount + PAGE_SIZE, totalAvailable);
       renderResults();
     });
   }
-  const storyTrigger = $('#open-story');
-  if (storyTrigger) {
-    storyTrigger.addEventListener('click', openStoryModal);
-  }
+  document.querySelectorAll('[data-action="open-story"]').forEach((el) => {
+    el.addEventListener('click', openStoryModal);
+  });
   document.querySelectorAll('[data-action="dismiss-story"]').forEach((el) => {
     el.addEventListener('click', closeStoryModal);
   });
@@ -3159,7 +2811,7 @@ function bindEvents() {
 
 async function init() {
   data = await loadData();
-  favorites = loadFavoritesFromStorage();
+  favorites = loadFavorites(FAVORITES_KEY);
   prepareMatchingWeights();
   buildMetaMaps();
   applySchemaLimits();

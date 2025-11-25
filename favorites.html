@@ -12,30 +12,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Suosikit - Nimi vauvalle</title>
     <link
-      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Merienda:wght@700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Mea+Culpa&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="styles.css" />
     <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
   </head>
-  <body>
+  <body data-nav-label="Takaisin hakuun" data-nav-href="index.html">
     <!-- Google Tag Manager (noscript) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-NJMD9WQQ"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- End Google Tag Manager (noscript) -->
-    <header class="page-header">
-      <div class="branding">
-        <p class="eyebrow">Suosikit</p>
-        <h1 class="hero-title">Tallennetut nimisuosikit</h1>
-        <p class="hero-subtitle">Näet omat suosikkisi tai sinulle jaetun listan. Voit poistaa nimiä ja tallentaa muutokset.</p>
-      </div>
-      <div class="favorite-actions">
-        <a class="ghost" href="index.html">← Takaisin hakuun</a>
-        <button class="primary" id="save-favorites" hidden>Tallenna tehdyt muutokset</button>
-      </div>
-    </header>
-
     <main class="layout">
+      <header class="page-header">
+        <a class="ghost favorite-nav" href="index.html">Takaisin hakuun</a>
+        <div class="branding wide">
+          <p class="eyebrow">Suosikit</p>
+          <p class="hero-subtitle">Näet omat suosikkisi tai sinulle jaetun listan. Voit poistaa nimiä ja tallentaa muutokset.</p>
+        </div>
+      </header>
       <section class="results" aria-live="polite">
         <div class="favorites-toolbar">
           <div>
@@ -48,7 +43,13 @@
           </div>
         </div>
         <div id="favorites-list" class="name-list"></div>
+        <div class="load-more-row">
+          <button class="primary" id="save-favorites" hidden>Tallenna tehdyt muutokset</button>
+        </div>
       </section>
+      <aside class="ad-rail ad-rail-scroll" aria-label="Side ad placeholder">
+        <div class="ad-slot ad-rail-slot">Mainospaikka</div>
+      </aside>
     </main>
 
     <script type="module" src="favorites.js"></script>

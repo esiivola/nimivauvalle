@@ -11,7 +11,7 @@
   --muted: #6f7486;
   --chip-bg: #f3f1fb;
   --danger: #d33f49;
-  --title-font: "Merienda", cursive;
+  --title-font: "Mea Culpa", cursive;
   --body-font: "Quicksand", "Helvetica Neue", Arial, sans-serif;
 
   font-size: 15px;
@@ -42,16 +42,30 @@ main {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1.5rem;
+  width: min(100%, 1360px);
+  margin: 0 auto;
 }
 
 .page-header {
-  width: min(100%, 1360px);
-  margin: 0 auto 1.5rem auto;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  justify-content: space-between;
-  align-items: flex-start;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: end;
+  gap: 0.5rem 1rem;
+  margin: 0 auto 0.5rem auto;
+  grid-column: 1 / -1;
+}
+
+.branding.wide {
+  grid-column: 1 / 2;
+  grid-row: 1 / span 2;
+}
+
+.page-header .favorite-nav {
+  grid-row: 2;
+  justify-self: end;
+  align-self: end;
 }
 
 .eyebrow {
@@ -64,10 +78,11 @@ main {
 
 .hero-title {
   margin: 0.2rem 0;
-  font-size: clamp(1.6rem, 4vw, 2.6rem);
-  font-weight: 700;
+  font-size: clamp(2.4rem, 5vw, 3.6rem);
+  font-weight: 400;
   font-family: var(--title-font);
   letter-spacing: -0.02em;
+  padding-left: 0.5rem;
 }
 
 .hero-subtitle {
@@ -87,10 +102,6 @@ main {
   font-weight: 600;
 }
 
-.ad-top {
-  min-width: 200px;
-}
-
 .ad-inline,
 .ad-inline-top {
   margin: 0.5rem 0;
@@ -103,9 +114,17 @@ main {
 
 .ad-rail {
   display: none;
+}
+
+/* right rail ad placement */
+.ad-rail-slot {
+  min-width: 220px;
+  height: 420px;
+}
+
+.ad-rail-scroll {
   position: sticky;
   top: 1.5rem;
-  align-self: flex-start;
 }
 
 .favorite-nav {
@@ -118,10 +137,7 @@ main {
   font-weight: 700;
 }
 
-.ad-rail-slot {
-  min-width: 220px;
-  min-height: 600px;
-}
+/* legacy min-height override removed to keep consistent fixed height */
 
 .favorite-actions {
   display: flex;
@@ -157,6 +173,10 @@ main {
 .filter-section-title {
   font-weight: 700;
   margin: 0.35rem 0 0.1rem;
+}
+
+#filters-title {
+  margin-top: 0;
 }
 
 .filter-block {
@@ -670,6 +690,7 @@ button:not(:disabled):hover {
   margin-top: 1rem;
 }
 
+
 .name-list {
   display: flex;
   flex-direction: column;
@@ -716,6 +737,18 @@ button:not(:disabled):hover {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+
+.filtered-status {
+  font-size: 0.9rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.filtered-nav {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 .filtered-reasons {
@@ -792,6 +825,13 @@ button:not(:disabled):hover {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.favorites-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .share-input {
@@ -998,9 +1038,35 @@ button:not(:disabled):hover {
   .ad-rail {
     display: block;
   }
+  .layout-actions {
+    grid-column: 1 / 2;
+    grid-row: 1;
+  }
   .filters,
   .results {
     grid-column: 1 / 2;
+  }
+  .page-header {
+    grid-column: 1 / 2;
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .filters {
+    grid-row: 2;
+  }
+  .results {
+    grid-row: 3;
+  }
+  .ad-rail-fixed {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: stretch;
+  }
+  .ad-rail-scroll {
+    grid-column: 2;
+    grid-row: 3;
+    align-self: start;
   }
 }
 
@@ -1019,6 +1085,22 @@ button:not(:disabled):hover {
   border-bottom: 1px solid var(--border);
 }
 
+@media (max-width: 640px) {
+  .detail-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .detail-label {
+    width: auto;
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+}
+
+.name-card-body {
+  width: 100%;
+}
+
 .detail-row.chart-row .detail-content {
   width: 100%;
 }
@@ -1028,9 +1110,9 @@ button:not(:disabled):hover {
 }
 
 .detail-label {
-  flex: 0 0 150px;
-  font-weight: 600;
-  color: var(--muted);
+  font-weight: 500;
+  color: var(--text);
+  width: 180px;
 }
 
 .detail-content {
@@ -1453,4 +1535,7 @@ button.icon-button {
   .weight-editor-actions-spacer {
     display: none;
   }
+}
+.modal-panel .hint {
+  margin-top: 0;
 }
