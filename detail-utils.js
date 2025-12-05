@@ -48,7 +48,7 @@ export function renderGroupChips(entry, groupMeta, options = {}) {
 }
 
 export function renderPhoneticSummary(entry, phoneticMeta, options = {}) {
-  const { noHighlightsLabel = 'Ei erityisiä piirteitä', labelFor = (meta) => meta?.label || meta?.key, describe = (meta) => meta?.description || '' } = options;
+  const { labelFor = (meta) => meta?.label || meta?.key, describe = (meta) => meta?.description || '' } = options;
   const features = [];
   const seen = new Set();
   Object.entries(entry?.phonetic || {}).forEach(([key, data]) => {
@@ -63,9 +63,7 @@ export function renderPhoneticSummary(entry, phoneticMeta, options = {}) {
       desc: describe(meta) || ''
     });
   });
-  if (!features.length) {
-    return `<span>${noHighlightsLabel}</span>`;
-  }
+  if (!features.length) return '';
   return features
     .slice(0, 8)
     .map(

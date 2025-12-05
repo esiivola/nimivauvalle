@@ -15,6 +15,12 @@
       href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Mea+Culpa&display=swap"
       rel="stylesheet"
     />
+    <!-- Silktide Consent Manager -->
+    <link rel="stylesheet" id="silktide-consent-manager-css" href="cookie-banner/silktide-consent-manager.css" />
+    <script src="cookie-banner/silktide-consent-manager.js"></script>
+    <link rel="stylesheet" href="cookie-banner/consent-overrides.css" />
+    <script src="cookie-banner/consent-config.js"></script>
+    <script>initConsentBanner();</script>
     <link rel="stylesheet" href="styles.css" />
     <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
   </head>
@@ -27,19 +33,37 @@
       <header class="page-header">
         <a class="ghost favorite-nav" href="index.html">Takaisin hakuun</a>
         <div class="branding wide">
-          <p class="eyebrow">Suosikit</p>
+          <h1 class="hero-title">Nimi vauvalle</h1>
           <p class="hero-subtitle">Näet omat suosikkisi tai sinulle jaetun listan. Voit poistaa nimiä ja tallentaa muutokset.</p>
         </div>
       </header>
+      <div class="results-toolbar">
+        <label class="surname-field">
+          Kirjoita sukunimi
+          <input type="text" id="favorites-surname" name="surname" placeholder="Esim. Korhonen" autocomplete="off" />
+          <span class="hint">
+            Sivusto käyttää tekoälyä sopivien etunimien suositteluun. Sukunimeä ei tallenneta.
+            <button type="button" class="link-button" id="favorites-open-weight">Säädä tekoälyä</button>
+          </span>
+          <div id="favorites-surname-analysis" class="hint surname-analysis"></div>
+        </label>
+        <div class="share-actions">
+          <button class="ghost" type="button" id="share-favorites">Jaa suosikit</button>
+          <input type="text" id="share-url" class="share-input" readonly />
+        </div>
+      </div>
       <section class="results" aria-live="polite">
         <div class="favorites-toolbar">
           <div>
             <strong id="favorites-count">Ladataan...</strong>
             <p class="hint" id="favorites-context"></p>
+            <p class="hint" id="favorites-match-context"></p>
           </div>
-          <div class="share-actions">
-            <button class="ghost" type="button" id="share-favorites">Jaa suosikit</button>
-            <input type="text" id="share-url" class="share-input" readonly />
+          <div class="results-ordering">
+            <label class="sort-label">
+              <select id="favorites-sort-key"></select>
+            </label>
+            <button class="ghost" type="button" id="favorites-toggle-sort">↓</button>
           </div>
         </div>
         <div id="favorites-list" class="name-list"></div>
@@ -48,10 +72,42 @@
         </div>
       </section>
       <aside class="ad-rail ad-rail-scroll" aria-label="Side ad placeholder">
-        <div class="ad-slot ad-rail-slot">Mainospaikka</div>
+        <div class="ad-slot ad-rail-slot" hidden>Mainospaikka</div>
       </aside>
     </main>
 
+    <div id="favorites-weight-editor" class="modal" role="dialog" aria-modal="true" aria-labelledby="favorites-weight-title" hidden>
+      <div class="modal-backdrop" data-action="dismiss-fav-weight"></div>
+      <div class="modal-panel weight-editor-panel">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow" id="favorites-weight-eyebrow">Sukunimi-osuvuuden painotukset</p>
+            <h2 id="favorites-weight-title">Muokkaa painotuksia</h2>
+          </div>
+          <button type="button" class="icon-button" data-action="dismiss-fav-weight" aria-label="Sulje">x</button>
+        </div>
+        <p id="favorites-weight-description" class="hint">Säädä, miten eri äännepiirteet vaikuttavat suosikkilistasi pisteisiin.</p>
+        <div id="favorites-weight-list" class="weight-editor-list"></div>
+        <div class="weight-editor-footer">
+          <div class="weight-editor-status">
+            <div id="favorites-weight-total" class="weight-editor-total"></div>
+            <div id="favorites-weight-remaining" class="weight-editor-remaining">Negatiiviset arvot vähentävät pisteitä.</div>
+            <div id="favorites-weight-error" class="weight-editor-error" role="alert"></div>
+          </div>
+          <div class="weight-editor-actions">
+            <button type="button" class="ghost" data-action="favorites-reset-weight">Palauta oletukset</button>
+            <span class="weight-editor-actions-spacer"></span>
+            <button type="button" class="ghost" data-action="dismiss-fav-weight">Peruuta</button>
+            <button type="button" class="primary" id="favorites-weight-save" data-action="favorites-save-weight">OK</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div data-include="footer.html"></div>
+    <script type="module">
+      import { initPageChrome } from './site.js';
+      initPageChrome();
+    </script>
     <script type="module" src="favorites.js"></script>
   </body>
 </html>

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="fi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tietoa palvelusta | Nimi vauvalle</title>
+    <meta
+      name="description"
+      content="Miten Nimi vauvalle laskee nimien sopivuuden, mistä data tulee ja milloin sivusto on päivitetty."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Mea+Culpa&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="canonical" href="https://nimivauvalle.fi/about.html" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-nav-label="Takaisin hakuun" data-nav-href="index.html">
+    <main class="layout">
+      <header class="page-header">
+        <a class="ghost favorite-nav" href="index.html">Takaisin hakuun</a>
+        <div class="branding wide">
+          <p class="eyebrow">Tietoa</p>
+          <h1 class="hero-title">Kuinka Nimi vauvalle toimii?</h1>
+          <p class="hero-subtitle">
+            Fonetiikkaan perustuva yhteensopivuusarvio, tuoreet väestö- ja nimipäivädatat sekä käyttäjän säädettävissä oleva tekoäly.
+          </p>
+        </div>
+      </header>
+      <section data-include="content/about-section.html">
+        <p class="hint">Ladataan sisältöä…</p>
+      </section>
+      <section data-include="content/quality-section.html">
+        <p class="hint">Ladataan laatukäytännöt…</p>
+      </section>
+    </main>
+    <div data-include="footer.html"></div>
+    <script type="module">
+      import { initPageChrome } from './site.js';
+      initPageChrome();
+    </script>
+  </body>
+</html>

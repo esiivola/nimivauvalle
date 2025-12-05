@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nimien selitys</title>
+    <meta
+      name="description"
+      content="Katso, miten fonetiikkamalli pisteyttää etu- tai sukunimen ja mitkä piirteet nostavat tai laskevat yhteensopivuutta."
+    />
+    <link rel="canonical" href="https://nimivauvalle.fi/explain.html" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Mea+Culpa&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-nav-label="Takaisin hakuun" data-nav-href="index.html">
+    <main class="layout">
+      <header class="page-header">
+        <a class="ghost favorite-nav" href="index.html">Takaisin hakuun</a>
+        <div class="branding wide">
+          <p class="eyebrow">Äänneselitys</p>
+          <h1 class="hero-title">Nimen äänneselitys</h1>
+          <p class="hero-subtitle">
+            Kirjoita etu- tai sukunimi ja katso, mitkä piirteet nostavat tai laskevat pisteitä fonetiikkamallissa.
+          </p>
+          <p class="hint">Malli käyttää samoja vokaali-, konsonantti- ja rytmiparametreja kuin varsinainen nimihakukone.</p>
+        </div>
+      </header>
+      <section class="content-block">
+        <h2>Anna analysoitava nimi</h2>
+        <div class="input-row" style="margin-top:0.25rem;">
+          <input id="name-input" type="text" placeholder="Syötä etu- tai sukunimi" />
+          <label><input type="radio" name="role" value="first" checked /> Etunimi</label>
+          <label><input type="radio" name="role" value="last" /> Sukunimi</label>
+        </div>
+      </section>
+      <section class="content-block">
+        <h2>Selitys fonetiikkamallista</h2>
+        <div id="explanation" class="grid" aria-live="polite"></div>
+      </section>
+    </main>
+    <div data-include="footer.html"></div>
+    <script type="module">
+      import { initPageChrome } from './site.js';
+      initPageChrome();
+    </script>
+    <script type="module" src="./explain.js"></script>
+  </body>
+</html>

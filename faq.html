@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Usein kysyttyä | Nimi vauvalle</title>
+    <meta
+      name="description"
+      content="Tietosuoja, pistelasku ja mainoskäytännöt Nimi vauvalle -palvelussa. Lue vastaukset yleisimpiin kysymyksiin."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Mea+Culpa&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="canonical" href="https://nimivauvalle.fi/faq.html" />
+    <link rel="stylesheet" href="styles.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Mitä tietoja tallennetaan?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Sukunimiä ei tallenneta palvelimelle. Evästeet keräävät vain välttämättömät istuntotiedot. Analytiikka- ja mainosevästeet aktivoituvat vasta suostumuksellasi."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Miten pistelasku toimii?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Pistelasku yhdistää fonetiikan (vokaali- ja konsonanttiprofiilit, rytmi, painotus), yleisyyden ja valitsemasi painotukset. Negatiiviset painotukset vähentävät pisteitä, jos piirre on vahva."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Miksi näen mainoksia?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Mainoksia näytetään vain sisältörikkailla näkymillä kulujen kattamiseksi. Tyhjillä ruuduilla tai latausvirheissä mainospaikat pysyvät piilossa AdSense-politiikan mukaisesti."
+            }
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body data-nav-label="Takaisin hakuun" data-nav-href="index.html">
+    <main class="layout">
+      <header class="page-header">
+        <a class="ghost favorite-nav" href="index.html">Takaisin hakuun</a>
+        <div class="branding wide">
+          <p class="eyebrow">FAQ</p>
+          <h1 class="hero-title">Usein kysyttyä</h1>
+          <p class="hero-subtitle">Tietosuoja, pistelasku, mainosnäytöt ja jakaminen yhdessä paikassa.</p>
+        </div>
+      </header>
+      <section data-include="content/faq-section.html">
+        <p class="hint">Ladataan vastauksia…</p>
+      </section>
+    </main>
+    <div data-include="footer.html"></div>
+    <script type="module">
+      import { initPageChrome } from './site.js';
+      initPageChrome();
+    </script>
+  </body>
+</html>

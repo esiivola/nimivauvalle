@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Yksityisyys ja evästeet | Nimi vauvalle</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Mea+Culpa&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-nav-label="Takaisin hakuun" data-nav-href="index.html">
+    <main class="layout">
+      <header class="page-header">
+        <a class="ghost favorite-nav" href="index.html">Takaisin hakuun</a>
+        <div class="branding wide">
+          <p class="eyebrow">Tietosuoja</p>
+          <h1 class="hero-title">Yksityisyys ja evästeet</h1>
+          <p class="hero-subtitle">Kuvaus siitä, mitä keräämme ja miksi. Päivitetty: <span id="updated-date">2025-12-05</span></p>
+        </div>
+      </header>
+      <section class="content-block">
+        <h2>Mitä tietoa me ja kumppanimme keräämme?</h2>
+        <ul>
+          <li>Sivusto tallentaa kaiken syötetyn tiedon selaimen välimuistiin - sivuston kehittäjillä ei ole pääsyä esimerkiksi syötettyihin sukunimiin.</li>
+          <li>Mikäli sallit analytiikka- ja mainosevästeet (Google Analytics, Google Ads/AdSense), näyttää sivusto personoituja mainoksia ja kerää käyttäjätilastoja.</li>
+        </ul>
+        <h2>Miksi keräämme dataa?</h2>
+        <ul>
+          <li>Analytiikkaevästeet: Käytön mittaaminen ja sivun kehittäminen anonyymin käyttäjädatan perusteella.</li>
+          <li>Mainosevästeet: Mainosten näyttäminen ja mahdollinen personointi mahdollistaa paremman käyttökokemuksen.</li>
+          <li>Mainoksista saatavilla tuloilla katetaan sivuston ylläpitomaksut.</li>
+        </ul>
+        <h2>Suostumus ja hallinta</h2>
+        <p>
+          Näytämme Silktide-evästebannerin ensimmäisellä käynnillä. Voit hyväksyä tai hylätä analytiikka- ja
+          mainosevästeet. Välttämättömät evästeet ovat käytössä aina. Voit muuttaa valintojasi tyhjentämällä sivuston
+          evästeet selaimestasi.
+        </p>
+        <h2>Tietojen jakaminen</h2>
+        <p>
+          Suostumuksesi jälkeen jaamme tietoja Googlelle mainosten ja analytiikan toteuttamiseksi. Google voi yhdistää
+          tietoja muihin palveluihinsa. Tutustu Googlen
+          <a href="https://policies.google.com/technologies/ads?hl=fi" target="_blank" rel="noreferrer">mainoskäytäntöihin</a>.
+        </p>
+        <h2>Säilytysajat</h2>
+        <ul>
+          <li>Suosikit ja suodattimet: tallentuvat selaimen paikalliseen tallennukseen, kunnes poistat ne.</li>
+          <li>Analytiikka- ja mainosdata: Google huolehtii säilytysajoista omien käytäntöjensä mukaisesti.</li>
+          <li>Lokit: poistetaan säännöllisesti virheiden seurantaa varten.</li>
+        </ul>
+        <h2>Oikeudet</h2>
+        <ul>
+          <li>Voit kieltäytyä ei-välttämättömistä evästeistä.</li>
+          <li>Voit käyttää selaimen yksityisyystyökaluja (Do Not Track, evästeiden esto) palvelua käyttäessäsi.</li>
+        </ul>
+        <h2>Yhteystiedot</h2>
+        <p>Jos sinulla on kysyttävää tietosuojasta, ota yhteyttä: <a href="mailto:nimivauvalle@gmail.com">nimivauvalle@gmail.com</a></p>
+      </section>
+    </main>
+    <div data-include="footer.html"></div>
+    <script type="module">
+      import { initPageChrome } from './site.js';
+      initPageChrome();
+      document.getElementById('updated-date').textContent = '2025-02-01';
+    </script>
+  </body>
+</html>

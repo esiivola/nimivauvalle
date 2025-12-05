@@ -11,6 +11,23 @@ import {
   fetchWikiSummary
 } from './detail-utils.js';
 import { FAVORITES_KEY, loadFavorites, saveFavorites } from './favorites-store.js';
+import { loadMatchingModel, computePairScore as computeModelPairScore, computeBuckets } from './matching-model.js';
+import { buildExplanation, friendlyBucket } from './explain-utils.js';
+import { registerAdSlots, setAdSlotsEnabled } from './ad-service.js';
+import { buildSurnameData, formatSurnameUsage } from './surname-service.js';
+import MATCH_WEIGHT_FIELDS from './weight-fields.js';
+import {
+  areWeightsEqual,
+  computeAbsoluteWeightBudget,
+  formatPercentNumber,
+  normalizeWeightMap,
+  parseWeightOverrides,
+  percentToWeight,
+  persistSharedWeights,
+  readSharedWeights,
+  serializeWeightOverrides,
+  weightToPercent
+} from './weight-utils.js';
 
 const PAGE_SIZE = 50;
 
@@ -35,7 +52,10 @@ const translations = {
     historyYAxis: '%-osuus annetuista nimistä',
     historyNoData: 'Ei historiallista käyttödataa',
     populationTag: (count) => `Arvio: ~${count} hlöä`,
-    comboTag: (count) => `Täyskaimoja: ~${count} hlöä`,
+    comboTag: (count) => {
+      const rounded = Math.round(count);
+      return rounded >= 1 ? `Täyskaimoja: ~${rounded} hlöä` : '';
+    },
     comboLabel: 'Arvio valitun sukunimen kanssa',
     populationTitle: 'Arvioitu määrä Suomessa',
     populationTotalLabel: 'Yhteensä',
@@ -99,8 +119,8 @@ const translations = {
 const state = {
   genders: new Set(['female', 'male', 'unisex']),
   surname: '',
-  includeLetters: '',
-  excludeLetters: '',
+  includeLettersInput: '',
+  excludeLettersInput: '',
   letterRange: { min: 1, max: 20 },
   populationRange: { min: 0, max: 45000 },
   popularityFilters: [],
@@ -127,6 +147,7 @@ let currentResults = [];
 let filteredOutResults = [];
 let orderedResults = [];
 let transitionConfig = null;
+let matchingModel = null;
 let detailService = null;
 const LETTER_LIMITS = { min: 1, max: 20 };
 const POPULATION_LIMITS = { min: 0, max: 45000 };
@@ -140,9 +161,25 @@ let weightEditorInputs = [];
 let defaultMatchingWeights = null;
 const WEIGHT_SUM_TOLERANCE = 0.05;
 const DETAIL_AD_FREQUENCY = 3;
+const normalizeGroupKey = (key) => String(key || '').toLowerCase().replace(/\.txt$/, '');
+const getFilteredCount = () => (Array.isArray(currentResults) ? currentResults.length : 0);
+
+function parseTriToken(token) {
+  const parts = (token || '').split('.');
+  if (parts.length <= 1) {
+    return { key: token || '', mode: 'include' };
+  }
+  const mode = parts.pop() || 'include';
+  const key = parts.join('.');
+  return { key, mode };
+}
 const detailAds = createAdTracker(DETAIL_AD_FREQUENCY);
 let filterFeatureMeta = [];
 const expandedFilteredBlocks = new Set();
+let surnameExplainLink = null;
+let surnameExplainModal = null;
+let hasScrolledToResults = false;
+const SCROLL_FLAG_KEY = 'scrollToResults';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -158,8 +195,8 @@ function getTypedSurname() {
 }
 
 function isRangeFilterActive() {
-  const includeActive = Boolean(state.includeLetters);
-  const excludeActive = Boolean(state.excludeLetters);
+  const includeActive = parseLetterTokens(state.includeLettersInput).length > 0;
+  const excludeActive = parseLetterTokens(state.excludeLettersInput).length > 0;
   const letterRangeActive =
     state.letterRange.min > LETTER_LIMITS.min || state.letterRange.max < LETTER_LIMITS.max;
   return includeActive || excludeActive || letterRangeActive;
@@ -192,77 +229,17 @@ const sortDescriptions = {
   r_intensity: 'Lajittelee r-äänteiden määrästä voimakkaimpaan.'
 };
 
-const MATCH_WEIGHT_FIELDS = [
-  {
-    key: 'vowel_location',
-    label: 'Vokaaliharmonia nimien välillä',
-    description:
-      'Tekoäly ei yhdistä etu- (ä/ö/y) ja takavokaalipainotteisia (a/o/u) nimiä. Kieli on vokaaliäänteissä suun etu- tai takaosassa ja nopea kielen siirtymä on vaikea, esim. Heta Äijälä on esimerkki nimestä, jossa kieli joutuu liikkumaan nopeasti suun etuosasta suun takaosaan.'
-  },
-  {
-    key: 'vowel_openess',
-    label: 'Vokaalien avaruuden erot',
-    description:
-      'Tekoäly ei yhdistä väljiä (e/o/a) ja suppeita (i/u/y) vokaaleja sisältäviä nimiä. Kieli on vokaaliäänteissä suun ylä- tai alaosassa ja tämä vaikuttaa erityisesti sanojen korkeuteen, esim. Ninni ja Anne lausutaan eri korkeuksilta.'
-  },
-  {
-    key: 'softness',
-    label: 'Konsonanttien pehmeys',
-    description:
-      'Tekoäly ei yhdistä pehmeitä (m/n/l/r/j) ja kovia (p/t/k/b/d) konsonanttiäänteitä sisältäviä nimiä. Nimet, joissa on paljon pehmeitä konsonantteja, voivat kuulostaa lempeämmiltä verrattuna nimiin, joissa on enemmän kovia konsonantteja ja ristiriita voi kuulostaa oudolta. Esim. nimen Tapio Luoma etunimi kuulostaa kovalta, mutta sukunimi pehmeältä.'
-  },
-  {
-    key: 'tone',
-    label: 'Sävy (bouba/kiki -efekti)',
-    description:
-      'Nimen sävy voi kuulostaa rauhalliselta ja lämpimältä (u/o/m/a/n) tai terävältä ja kovalta (k/t/s/p/i). Esim. nimen Mauno Sipilä etunimi kuulostaa rauhalliselta, mutta sukunimi on terävämpi. Tekoäly ei yhdistä nimiä, joista toinen on rauhallinen ja lämmin, ja toinen terävä ja kova'
-  },
-  {
-    key: 'rhythm',
-    label: 'Rytmi',
-    description:
-      'Tekoäly vertaa etu- ja sukunimien tavujen rytmiä. Tavut jaetaan raskaisiin (R = raskas, jos tavussa on kaksi peräkkäistä vokaalia tai se päättyy konsonattiin, esim. "Aa"(-va) tai "Kris"(-ti-an)) ja kevyisiin (K = kevyt, muussa tapauksessa). Mitä samankaltaisempi R/K-kuvio, sitä luontevampi yhdistelmä on. Esim. nimessä Kris-ti-an Vir-ta-nen sekä etu- että sukunimi ovat rytmiltään RKR.'
-  },
-  {
-    key: 'length',
-    label: 'Pituusero',
-    description:
-      'Tekoäly vertailee etu- ja sukunimen pituuksia. Pitkä sukunimi ja lyhyt etunimi tasapainottavat toisiaan. Vastaavasti lyhyt sukunimi ja pitkä etunimi toimivat hyvin yhdessä. Liian pitkä pituusero voi kuitenkin kuulostaa epätasapainoiselta.'
-  },
-  {
-    key: 'alliteration',
-    label: 'Allitteraatio',
-    description:
-      'Tekoäly suosittelee helpommin nimiä, jotka päättyvät samaan kirjaimeen kuin millä sukunimi alkaa. Ville Virtanen on esimerkki tällaisesta nimestä. Tekoäly kutsuu tätä ilmiötä nimellä "allitteraatio"'
-  },
-  {
-    key: 'junction',
-    label: 'Etunimen lopun ja sukunimen alun vertailu',
-    description:
-      'Jos etunimi päättyy samankaltaisiin äänteisiin, kuin millä sukunimi alkaa, tekoäly suosittelee tällaisia nimiä helpommin. Iiro Roima on esimerkki tällaisesta yhdistelmästä.'
-  },
-  {
-    key: 'junction_transition',
-    label: 'Etunimen lopun ja sukunimen alun vertailu',
-    description:
-      'Tekoäly vertaa etunimen viimeistä ja sukunimen ensimmäistä äännettä. Se on opetellut suomalaisista nimistä, minkälaiset äänteet kuulostavat luonnollisilta, ja suosii mahdollisimman normaaleja nimiä.'
-  },
-  {
-    key: 'head_transition',
-    label: 'Etu- ja sukunimen alkujen vertailu',
-    description:
-      'Tekoäly vertaa etunimen ja sukunimen ensimmäisiä äänteitä. Se on opetellut suomalaisista nimistä, minkälaiset alkuäänteet kuulostavat luonnollisilta ja suosii mahdollisimman normaaleja nimiä.'
-  },
-  {
-    key: 'oddness',
-    label: 'Harvinaisuus',
-    description:
-      'Harvinaisia etunimiä (alle 500 nimenkantajaa) suositellaan helpommin kuin yleisiä nimiä.'
-  }
-];
-
 async function loadData() {
-  return loadDataset({ includeSurnames: true });
+  const [dataset, model] = await Promise.all([
+    loadDataset({ includeSurnames: true }),
+    loadMatchingModel()
+  ]);
+  matchingModel = model;
+  if (!state.weightOverrides) {
+    const shared = readSharedWeights();
+    if (shared) state.weightOverrides = shared;
+  }
+  return dataset;
 }
 
 function initSelects() {
@@ -300,9 +277,7 @@ function updateSortOptionTooltips() {
 
 function buildMetaMaps() {
   phoneticMeta = new Map(data.schema.phoneticFeatures.map((f) => [f.key, f]));
-  const filteredGroups = (data.schema.groupFeatures || []).filter(
-    (group) => !String(group.key || '').startsWith('nameday_calendar_')
-  );
+  const filteredGroups = data.schema.groupFeatures || [];
   groupMeta = new Map(filteredGroups.map((g) => [g.key, g]));
   groupFilterKeys = filteredGroups
     .filter(
@@ -313,15 +288,9 @@ function buildMetaMaps() {
     )
     .map((g) => g.key);
   gradeMeta = data.schema.intensityGrades || [];
-  const cleanSurnames = (data.surnames || []).filter((entry) => (entry.name || '').trim().length);
-  surnameMap = new Map(cleanSurnames.map((entry) => [entry.name.toLowerCase(), entry]));
-  surnameRankMap = new Map();
-  const rankedSurnames = [...cleanSurnames]
-    .filter((entry) => Number.isFinite(Number(entry.popularity)))
-    .sort((a, b) => Number(b.popularity || 0) - Number(a.popularity || 0));
-  rankedSurnames.forEach((entry, index) => {
-    surnameRankMap.set((entry.name || '').toLowerCase(), index + 1);
-  });
+  const surnameData = buildSurnameData(data.surnames || []);
+  surnameMap = surnameData.map;
+  surnameRankMap = surnameData.rankMap;
   transitionConfig = data.schema.matching?.transitions || null;
   detailService = createDetailService(data.schema);
   filterFeatureMeta = data.schema.filterFeatures || [];
@@ -368,7 +337,62 @@ function normalizeLetterFilter(value) {
   if (!value) return '';
   return value
     .toLowerCase()
-    .replace(/[^a-zåäöæøœšžẞ\u00c0-\u017f\-]/g, '');
+    .replace(/[^a-zåäöæøœšžß\u00c0-\u017f,\s\-\^\$\*]/g, '');
+}
+
+function parseLetterTokens(value) {
+  return (value || '')
+    .split(/[,\s]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function buildCharCounts(str) {
+  const counts = new Map();
+  for (const ch of str.toLowerCase()) {
+    const current = counts.get(ch) || 0;
+    counts.set(ch, current + 1);
+  }
+  return counts;
+}
+
+function tokenSatisfied(nameCounts, token) {
+  if (!token) return true;
+  const need = buildCharCounts(token);
+  for (const [char, required] of need.entries()) {
+    if ((nameCounts.get(char) || 0) < required) return false;
+  }
+  return true;
+}
+
+function isPatternToken(token) {
+  return /[\^\*$]/.test(token);
+}
+
+function tokenMatchesPattern(name, token) {
+  let pattern = '';
+  for (const ch of token) {
+    if (ch === '*') {
+      pattern += '.*';
+    } else if (ch === '^' || ch === '$') {
+      pattern += ch;
+    } else {
+      pattern += ch.replace(/[-/\\^$+?.()|[\]{}]/g, '\\$&');
+    }
+  }
+  try {
+    const re = new RegExp(pattern, 'i');
+    return re.test(name);
+  } catch {
+    return false;
+  }
+}
+
+function tokenPasses(name, nameCounts, token) {
+  if (isPatternToken(token)) {
+    return tokenMatchesPattern(name, token);
+  }
+  return tokenSatisfied(nameCounts, token);
 }
 
 function isFavoriteName(name) {
@@ -484,10 +508,10 @@ function restoreFromQuery() {
     state.sortDir = params.get('dir');
   }
   if (params.has('letters')) {
-    state.includeLetters = normalizeLetterFilter(params.get('letters'));
+    state.includeLettersInput = normalizeLetterFilter(params.get('letters'));
   }
   if (params.has('exclude')) {
-    state.excludeLetters = normalizeLetterFilter(params.get('exclude'));
+    state.excludeLettersInput = normalizeLetterFilter(params.get('exclude'));
   }
   if (params.has('len')) {
     const [minStr, maxStr] = params.get('len').split('-');
@@ -515,15 +539,22 @@ function restoreFromQuery() {
       grade: grade ? Number(grade) : 1
     };
   });
-  state.groupFilters = params.getAll('gf').map((token) => {
-    const [group, mode] = token.split('.');
-    const normalizedMode = mode && mode !== 'undefined' ? mode : 'include';
-    return {
-      id: nextGroupFilterId(),
-      group: groupFilterKeys.includes(group) ? group : groupFilterKeys[0] || '',
-      mode: normalizedMode
-    };
-  });
+  state.groupFilters = params
+    .getAll('gf')
+    .map((token) => {
+      const { key: group, mode } = parseTriToken(token);
+      const normalizedMode = mode && mode !== 'undefined' ? mode : 'include';
+      const norm = normalizeGroupKey(group);
+      const resolvedGroup =
+        groupFilterKeys.find((key) => normalizeGroupKey(key) === norm) || groupFilterKeys[0] || '';
+      if (!resolvedGroup) return null;
+      return {
+        id: nextGroupFilterId(),
+        group: resolvedGroup,
+        mode: normalizedMode
+      };
+    })
+    .filter(Boolean);
 
   if (params.has('w')) {
     const parsedWeights = parseWeightOverrides(params.get('w'));
@@ -532,6 +563,16 @@ function restoreFromQuery() {
       weightPercentBudget = computeAbsoluteWeightBudget(parsedWeights) || weightPercentBudget;
     }
   }
+}
+
+function updateFavoriteNavHref() {
+  const link = document.querySelector('.favorite-nav');
+  if (!link) return;
+  const params = new URLSearchParams();
+  const surname = (state.surname || '').trim();
+  if (surname) params.set('surname', surname);
+  link.href = params.toString() ? `favorites.html?${params.toString()}` : 'favorites.html';
+  setAdSlotsEnabled('results', getFilteredCount() > 0);
 }
 
 function applySchemaLimits() {
@@ -607,8 +648,8 @@ function syncFormWithState() {
     checkbox.checked = state.genders.has(checkbox.value);
   });
   $('#surname-input').value = state.surname;
-  $('#letters-include').value = state.includeLetters;
-  $('#letters-exclude').value = state.excludeLetters;
+  $('#letters-include').value = state.includeLettersInput;
+  $('#letters-exclude').value = state.excludeLettersInput;
   lettersRangeControl?.setValues(state.letterRange.min, state.letterRange.max);
   updatePopulationInputs();
   $('#sort-key').value = state.sortKey;
@@ -760,12 +801,11 @@ function renderPopularityFilters() {
     {
       label: 'Suosittu',
       prefix: 'popular_',
-      desc: 'Kunkin vuosikymmenen 100 suosituinta nimeä'
+      desc: 'Kunkin vuosikymmenen 500 suosituinta nimeä'
     }
   ];
-  const createSelect = (prefix) => {
+  const createSelect = (prefix, options) => {
     const select = document.createElement('select');
-    const options = getPopularityOptions(prefix);
     if (!options.length) {
       const opt = document.createElement('option');
       opt.value = '';
@@ -782,13 +822,15 @@ function renderPopularityFilters() {
     return select;
   };
   rows.forEach((rowConfig) => {
+    const options = getPopularityOptions(rowConfig.prefix);
+    if (!options.length) return;
     const row = document.createElement('div');
     row.className = 'popularity-row';
     const labelEl = document.createElement('div');
     labelEl.textContent = rowConfig.label;
     labelEl.className = 'filter-label-text';
     row.appendChild(labelEl);
-    const select = createSelect(rowConfig.prefix);
+    const select = createSelect(rowConfig.prefix, options);
     row.appendChild(select);
     const tri = document.createElement('button');
     tri.type = 'button';
@@ -858,8 +900,8 @@ function updateStateFromForm() {
   });
   state.genders = selectedGenders.size ? selectedGenders : new Set(['female', 'male', 'unisex']);
   state.surname = $('#surname-input').value.trim();
-  state.includeLetters = normalizeLetterFilter($('#letters-include').value);
-  state.excludeLetters = normalizeLetterFilter($('#letters-exclude').value);
+  state.includeLettersInput = normalizeLetterFilter($('#letters-include').value);
+  state.excludeLettersInput = normalizeLetterFilter($('#letters-exclude').value);
   if (lettersRangeControl) {
     const { min, max } = lettersRangeControl.values();
     state.letterRange = normalizeRangeValues(min, max, LETTER_LIMITS);
@@ -910,6 +952,7 @@ function applyFilters(skipFormSync = false) {
   sortResults(orderedResults);
   currentResults = filtered;
   state.matchInfo = { surnameEntry, missingSurname };
+  updateSurnameAnalysis(surnameEntry, missingSurname);
   renderResults();
   updateUrl();
 }
@@ -923,21 +966,12 @@ function passesPopularityFilters(entry) {
 }
 
 function passesLetterFilters(entry) {
-  const name = entry.name || entry.display || '';
-  if (state.includeLetters) {
-    for (const char of state.includeLetters) {
-      if (char && !name.includes(char)) {
-        return false;
-      }
-    }
-  }
-  if (state.excludeLetters) {
-    for (const char of state.excludeLetters) {
-      if (char && name.includes(char)) {
-        return false;
-      }
-    }
-  }
+  const name = (entry.name || entry.display || '').toLowerCase();
+  const nameCounts = buildCharCounts(name);
+  const includeTokens = parseLetterTokens(state.includeLettersInput);
+  const excludeTokens = parseLetterTokens(state.excludeLettersInput);
+  if (includeTokens.length && !includeTokens.some((token) => tokenPasses(name, nameCounts, token))) return false;
+  if (excludeTokens.length && excludeTokens.some((token) => tokenPasses(name, nameCounts, token))) return false;
   return true;
 }
 
@@ -999,22 +1033,24 @@ function getActiveFilterChips() {
       }
     });
   });
-  if (state.includeLetters) {
+  const includeTokens = parseLetterTokens(state.includeLettersInput);
+  if (includeTokens.length) {
     chips.push({
-      text: `${tSummary.lettersInclude}: ${state.includeLetters}`,
+      text: `${tSummary.lettersInclude}: ${includeTokens.join(' / ')}`,
       remove: () => {
-        state.includeLetters = '';
+        state.includeLettersInput = '';
         const includeInput = $('#letters-include');
         if (includeInput) includeInput.value = '';
         applyFilters(true);
       }
     });
   }
-  if (state.excludeLetters) {
+  const excludeTokens = parseLetterTokens(state.excludeLettersInput);
+  if (excludeTokens.length) {
     chips.push({
-      text: `${tSummary.lettersExclude}: ${state.excludeLetters}`,
+      text: `${tSummary.lettersExclude}: ${excludeTokens.join(' / ')}`,
       remove: () => {
-        state.excludeLetters = '';
+        state.excludeLettersInput = '';
         const excludeInput = $('#letters-exclude');
         if (excludeInput) excludeInput.value = '';
         applyFilters(true);
@@ -1062,13 +1098,15 @@ function collectFilterFailures(entry) {
     });
   }
   const name = (entry.name || entry.display || '').toLowerCase();
-  if (state.includeLetters) {
-    const missing = Array.from(state.includeLetters).filter((char) => char && !name.includes(char));
-    if (missing.length) {
+  const includeTokens = parseLetterTokens(state.includeLettersInput);
+  if (includeTokens.length) {
+    const nameCounts = buildCharCounts(name);
+    const satisfied = includeTokens.some((token) => tokenPasses(name, nameCounts, token));
+    if (!satisfied) {
       reasons.push({
-        text: `Puuttuvat kirjaimet: ${missing.join(', ')}`,
+        text: `Ei täytä: ${includeTokens.join(', ')}`,
         remove: () => {
-          state.includeLetters = '';
+          state.includeLettersInput = '';
           const includeInput = $('#letters-include');
           if (includeInput) includeInput.value = '';
           applyFilters(true);
@@ -1076,13 +1114,15 @@ function collectFilterFailures(entry) {
       });
     }
   }
-  if (state.excludeLetters) {
-    const present = Array.from(state.excludeLetters).filter((char) => char && name.includes(char));
+  const excludeTokens = parseLetterTokens(state.excludeLettersInput);
+  if (excludeTokens.length) {
+    const nameCounts = buildCharCounts(name);
+    const present = excludeTokens.filter((token) => token && tokenPasses(name, nameCounts, token));
     if (present.length) {
       reasons.push({
-        text: `Kielletyt kirjaimet: ${present.join(', ')}`,
+        text: `Kielletyt jaksot: ${present.join(', ')}`,
         remove: () => {
-          state.excludeLetters = '';
+          state.excludeLettersInput = '';
           const excludeInput = $('#letters-exclude');
           if (excludeInput) excludeInput.value = '';
           applyFilters(true);
@@ -1372,52 +1412,6 @@ function computeCvSequencingScore(firstSimple, lastSimple) {
   return mapZeroOneToSigned(similarity);
 }
 
-function computeAbsoluteWeightBudget(weights) {
-  if (!weights) return 1;
-  const entries = Object.values(weights);
-  const total = entries.reduce((sum, value) => sum + Math.abs(Number(value) || 0), 0);
-  return total > 0 ? total : 1;
-}
-
-function serializeWeightOverrides(overrides) {
-  if (!overrides || typeof overrides !== 'object') return '';
-  return Object.entries(overrides)
-    .map(([key, value]) => `${key}:${Number(value).toFixed(4)}`)
-    .join(',');
-}
-
-function parseWeightOverrides(value) {
-  if (!value) return {};
-  const result = {};
-  value.split(',').forEach((pair) => {
-    const [key, raw] = pair.split(':');
-    if (!key) return;
-    const num = Number(raw);
-    if (!Number.isFinite(num)) return;
-    result[key] = num;
-  });
-  return normalizeWeightMap(result);
-}
-
-function normalizeWeightMap(weights) {
-  if (!weights) return {};
-  const entries = Object.entries(weights);
-  const total = computeAbsoluteWeightBudget(weights);
-  if (!total) {
-    return { ...weights };
-  }
-  const normalized = {};
-  entries.forEach(([key, value]) => {
-    normalized[key] = (Number(value) || 0) / total;
-  });
-  MATCH_WEIGHT_FIELDS.forEach((field) => {
-    if (!(field.key in normalized)) {
-      normalized[field.key] = 0;
-    }
-  });
-  return normalized;
-}
-
 function getActiveWeights() {
   if (state.weightOverrides) {
     return state.weightOverrides;
@@ -1428,44 +1422,22 @@ function getActiveWeights() {
   return data?.schema?.matching?.weights || {};
 }
 
-function weightToPercent(value) {
-  const safeBudget = weightPercentBudget || 1;
-  return ((value || 0) / safeBudget) * 100;
-}
-
-function percentToWeight(percent) {
-  const safeBudget = weightPercentBudget || 1;
-  return ((percent || 0) / 100) * safeBudget;
-}
-
-function formatPercentNumber(value) {
-  if (!Number.isFinite(value)) {
-    return '0';
-  }
-  return String(Math.round(value));
-}
-
 function prepareMatchingWeights() {
   if (!data?.schema?.matching?.weights) {
     defaultMatchingWeights = null;
     weightPercentBudget = 1;
     return;
   }
-  const normalized = normalizeWeightMap(data.schema.matching.weights);
+  const baseWeights = { ...data.schema.matching.weights };
+  if (baseWeights.junction_transition != null && baseWeights.end_start_transition == null) {
+    baseWeights.end_start_transition = baseWeights.junction_transition;
+  }
+  delete baseWeights.junction_transition;
+  delete baseWeights.junction;
+  const normalized = normalizeWeightMap(baseWeights);
   data.schema.matching.weights = normalized;
   defaultMatchingWeights = { ...normalized };
   weightPercentBudget = computeAbsoluteWeightBudget(normalized) || 1;
-}
-
-function areWeightsEqual(a = {}, b = {}, tolerance = 0.0001) {
-  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-  for (const key of keys) {
-    const diff = Math.abs((a[key] ?? 0) - (b[key] ?? 0));
-    if (diff > tolerance) {
-      return false;
-    }
-  }
-  return true;
 }
 
 function computeLengthBias(firstLength, lastLength) {
@@ -1502,105 +1474,22 @@ function endStartMatch(first, last, depth = 1) {
 }
 
 function evaluateMatchComponents(first, last) {
-  const metricsFirst = first.metrics;
-  const metricsLast = last.metrics;
+  if (!matchingModel) {
+    return {
+      components: {},
+      weightedSum: 0,
+      normalized: 0
+    };
+  }
   const weights = getActiveWeights();
-  const lengthPrefs = data.schema.matching.preferred_rhythm_diff || {};
-  const firstSimple = first.ipa?.simple || '';
-  const lastSimple = last.ipa?.simple || '';
-  const firstTransitions = first.transitions || {};
-  const lastTransitions = last.transitions || {};
-  const vowelLocation =
-    1 -
-    Math.abs(metricsFirst.front_ratio - metricsLast.front_ratio) -
-    Math.abs(metricsFirst.back_ratio - metricsLast.back_ratio);
-  let locationScore = clampSigned(vowelLocation);
-  if (
-    (metricsFirst.front_ratio > 0 && metricsLast.back_ratio > 0) ||
-    (metricsFirst.back_ratio > 0 && metricsLast.front_ratio > 0)
-  ) {
-    locationScore = -1;
+  const result = computeModelPairScore(first, last, weights, matchingModel);
+  if (!result) {
+    return { components: {}, weightedSum: 0, normalized: 0 };
   }
-  const vowelOpenRaw =
-    1 -
-    Math.abs(metricsFirst.open_ratio - metricsLast.open_ratio) -
-    Math.abs(metricsFirst.close_ratio - metricsLast.close_ratio);
-  const vowelOpen = applyCloseVowelPenalty(
-    clampSigned(vowelOpenRaw),
-    metricsFirst,
-    metricsLast
-  );
-  const softness = clampSigned(1 - Math.abs(metricsFirst.soft_ratio - metricsLast.soft_ratio));
-  const tone = clampSigned(1 - Math.abs(metricsFirst.valence - metricsLast.valence));
-  const lengthDiff = Math.abs(metricsFirst.syllables - metricsLast.syllables);
-  let lengthPreference = lengthPrefs[String(lengthDiff)] ?? 0.5;
-  const firstLength = Number(metricsFirst.length ?? first.display?.length ?? 0);
-  const lastLength = Number(metricsLast.length ?? last.display?.length ?? 0);
-  lengthPreference += computeLengthBias(firstLength, lastLength);
-  lengthPreference = clamp(lengthPreference, 0, 1);
-  const lengthScore = mapZeroOneToSigned(lengthPreference);
-  let alliteration = 0;
-  if (firstSimple && lastSimple) {
-    alliteration = firstSimple[0] === lastSimple[0] ? 1 : -1;
-  }
-  const boundaryOverlap = endStartMatch(
-    firstSimple,
-    lastSimple,
-    data.schema.matching.junction_depth || 1
-  );
-  const junction = clampSigned(boundaryOverlap * 2 - 1);
-  const junctionTransitionProb = getTransitionProbability(firstTransitions.end, lastTransitions.start);
-  const headTransitionProb = getTransitionProbability(firstTransitions.start, lastTransitions.start);
-  const junctionTransitionScore = normalizeTransitionProbability(junctionTransitionProb);
-  const headTransitionScore = normalizeTransitionProbability(headTransitionProb);
-  const rhythmSimilarity = computeRhythmSimilarity(first.rhythm_code, last.rhythm_code);
-  const rhythmScore = mapZeroOneToSigned(rhythmSimilarity);
-
-  let total =
-    weights.vowel_location * locationScore +
-    weights.vowel_openess * vowelOpen +
-    weights.softness * softness +
-    weights.tone * tone +
-    (weights.rhythm || 0) * rhythmScore +
-    (weights.length || 0) * lengthScore +
-    weights.alliteration * alliteration +
-    weights.junction * junction +
-    (weights.junction_transition || 0) * junctionTransitionScore +
-    (weights.head_transition || 0) * headTransitionScore;
-
-  const totalOwners = Number(first.popularity?.total ?? 0);
-  const oddnessWeight = weights.oddness ?? 0;
-  let oddnessScore = 0;
-  if (oddnessWeight && Number.isFinite(totalOwners)) {
-    const minThreshold = 200;
-    const maxThreshold = 1000;
-    let penalty = 0;
-    if (totalOwners <= minThreshold) {
-      penalty = 1;
-    } else if (totalOwners < maxThreshold) {
-      penalty = (maxThreshold - totalOwners) / (maxThreshold - minThreshold);
-    }
-    oddnessScore = clampSigned(penalty * 2 - 1);
-    total += oddnessWeight * oddnessScore;
-  }
-  const clampedTotal = clampSigned(total);
-  const normalizedTotal = (clampedTotal + 1) / 2;
   return {
-    components: {
-      vowel_location: locationScore,
-      vowel_openess: vowelOpen,
-      softness,
-      tone,
-      rhythm: rhythmScore,
-      length: lengthScore,
-      alliteration,
-      junction,
-      junction_transition: junctionTransitionScore,
-      head_transition: headTransitionScore,
-      oddness: oddnessWeight ? oddnessScore : 0
-    },
-    weightedSum: total,
-    normalized: Math.round(normalizedTotal * 1000) / 1000
+    components: result.components || {},
+    weightedSum: result.weightedSum ?? 0,
+    normalized: Math.round((result.normalized ?? 0) * 1000) / 1000
   };
 }
 
@@ -1609,12 +1498,141 @@ function computeMatchScore(first, last) {
   return result.normalized;
 }
 
+function describeLetters(group) {
+  if (!group) return '';
+  return group
+    .split('')
+    .filter((c, idx, arr) => arr.indexOf(c) === idx)
+    .join('/');
+}
+
+function describeRhythmPattern(pat) {
+  if (!pat) return '';
+  return pat
+    .split('')
+    .map((c) => (c === 'R' ? 'pitkän kuuloinen tavu' : 'lyhyen kuuloinen tavu'))
+    .join(' – ');
+}
+
+function describeComponentForName(component, buckets, weights) {
+  const firstDesc = (key) => friendlyBucket(component, buckets[`${component}_${key}`], key).phrase;
+  switch (component) {
+    case 'vowel_location':
+    case 'vowel_openess':
+      return `Etunimen ja sukunimen vokaalit ovat samantyyppisiä (${firstDesc('obs')} / ${firstDesc('cond')}), joten nimi soljuu luontevasti.`;
+    case 'softness':
+      return `Etunimen ja sukunimen konsonantit ovat samassa pehmeysskaalassa (${firstDesc('obs')} / ${firstDesc('cond')}), mikä kuulostaa miellyttävältä.`;
+    case 'tone':
+      return `Nimessä on samansävyinen sointi (${firstDesc('obs')} / ${firstDesc('cond')}), joten kokonaisuus ei riitele.`;
+    case 'syllables': {
+      const fo = buckets.syllables_obs;
+      const so = buckets.syllables_cond;
+      return `Etunimessä on ${fo} tavua ja sukunimessä ${so} tavua – pituudet tukevat toisiaan.`;
+    }
+    case 'length': {
+      const fo = buckets.length_obs;
+      const so = buckets.length_cond;
+      return `Etunimen (${fo}) ja sukunimen (${so}) kirjainmäärä on tasapainossa.`;
+    }
+    case 'rhythm': {
+      const fo = describeRhythmPattern(buckets.rhythm_obs);
+      const so = describeRhythmPattern(buckets.rhythm_cond);
+      return `Etunimen ja sukunimen tavurytmi muistuttavat toisiaan (${fo || 'tasainen'} / ${so || 'tasainen'}), mikä tekee nimestä sujuvan.`;
+    }
+    case 'head_transition': {
+      const cond = describeLetters(buckets.head_transition_cond);
+      return `Sukunimi alkaa äänteellä ${cond}. Etunimen aloitus sopii luontevasti samaan alkusointiin.`;
+    }
+    case 'end_start_transition': {
+      const cond = describeLetters(buckets.end_start_transition_cond);
+      return `Etunimen loppu ja sukunimen alku kohtaavat pehmeästi (sukunimi alkaa ${cond}).`;
+    }
+    default:
+      return '';
+  }
+}
+
+function buildMatchHighlights(entry, surnameEntry) {
+  if (!surnameEntry || !matchingModel) return [];
+  const weights = getActiveWeights();
+  const result = computeModelPairScore(entry, surnameEntry, weights, matchingModel);
+  if (!result) return [];
+  const buckets = computeBuckets(entry, surnameEntry);
+  const items = [];
+  Object.entries(result.components || {}).forEach(([key, value]) => {
+    const weight = weights[key];
+    if (weight == null) return;
+    const signed = key === 'alliteration' || key === 'oddness' ? value : mapZeroOneToSigned(value);
+    const contrib = signed * weight;
+    if (contrib <= 0) return;
+    const text = describeComponentForName(key, buckets, weights);
+    if (text) {
+      items.push({ key, contrib, text });
+    }
+  });
+  items.sort((a, b) => Math.abs(b.contrib) - Math.abs(a.contrib));
+  return items.slice(0, 5).map((item) => item.text);
+}
+function renderSurnameExplainLink(entry) {
+  let link = document.getElementById('surname-explain-link');
+  if (!entry) {
+    if (link) link.remove();
+    return;
+  }
+  const container = document.getElementById('surname-analysis');
+  if (!container) return;
+  if (!link) {
+    link = document.createElement('button');
+    link.id = 'surname-explain-link';
+    link.type = 'button';
+    link.className = 'ghost link-button';
+    link.textContent = 'Katso, mitä tekoäly ajattelee sukunimestä.';
+    link.hidden = false;
+    link.addEventListener('click', () => openSurnameExplain(entry));
+    container.appendChild(link);
+  } else {
+    link.onclick = () => openSurnameExplain(entry);
+    link.hidden = false;
+  }
+}
+
+function openSurnameExplain(entry) {
+  if (!surnameExplainModal || !entry) return;
+  const content = document.getElementById('surname-explain-content');
+  if (!content || !matchingModel) return;
+  content.innerHTML = '';
+  const explanations = buildExplanation(entry, 'last', matchingModel);
+  explanations.forEach((item) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const h = document.createElement('h3');
+    h.textContent = item.label;
+    const p = document.createElement('p');
+    p.textContent = item.text;
+    card.appendChild(h);
+    card.appendChild(p);
+    content.appendChild(card);
+  });
+  surnameExplainModal.hidden = false;
+  document.body.classList.add('modal-open');
+}
+
 
 function initWeightEditor() {
   if (weightEditorControls || !document) return;
   const trigger = $('#edit-weight-button');
   const modal = $('#weight-editor');
   if (!trigger || !modal) return;
+  const explainModal = $('#surname-explain-modal');
+  if (explainModal) {
+    const closeBtn = explainModal.querySelector('[data-action="close-surname-explain"]');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        explainModal.hidden = true;
+        document.body.classList.remove('modal-open');
+      });
+    }
+  }
   weightEditorControls = {
     trigger,
     modal,
@@ -1727,7 +1745,7 @@ function renderWeightEditorRows(prefillValues, sourceWeights) {
     const valueString =
       prefillValues && prefillValues.has(meta.key)
         ? prefillValues.get(meta.key)
-        : formatPercentNumber(weightToPercent(weights[meta.key] ?? 0));
+        : formatPercentNumber(weightToPercent(weights[meta.key] ?? 0, weightPercentBudget));
     inputEl.value = valueString;
     inputEl.addEventListener('input', handleWeightInputChange);
     inputWrap.appendChild(inputEl);
@@ -1828,12 +1846,13 @@ function applyWeightEditorChanges() {
     if (!Number.isFinite(value)) {
       return;
     }
-    updated[item.key] = percentToWeight(value);
+    updated[item.key] = percentToWeight(value, weightPercentBudget);
   });
   const normalizedUpdate = normalizeWeightMap(updated);
   const isSame = areWeightsEqual(normalizedUpdate, baseWeights);
   state.weightOverrides = isSame ? null : normalizedUpdate;
   weightPercentBudget = computeAbsoluteWeightBudget(getActiveWeights()) || 1;
+  persistSharedWeights(state.weightOverrides, defaultMatchingWeights);
   closeWeightEditor();
   applyFilters();
 }
@@ -1971,7 +1990,8 @@ function renderResults() {
   const t = translations.fi;
   const list = $('#results-list');
   const { surnameEntry, missingSurname } = state.matchInfo;
-  const totalAvailable = getDisplayableCount();
+  const totalAvailable = getFilteredCount();
+  setAdSlotsEnabled('results', totalAvailable > 0);
   list.innerHTML = '';
   let renderedCount = 0;
   let usedSlots = 0;
@@ -2121,16 +2141,81 @@ function hydrateCardBody(card, container, entry, t, surnameEntry) {
     if (groupRow) details.appendChild(groupRow);
   }
 
-  const comboContent = renderComboEstimate(entry, t, surnameEntry);
-  if (comboContent) {
-    const comboRow = createDetailRow(t.comboRowLabel, comboContent);
-    if (comboRow) details.appendChild(comboRow);
+  const matchHighlights = buildMatchHighlights(entry, surnameEntry);
+  const matchRowContent = document.createElement('div');
+  matchRowContent.className = 'match-explain';
+  const matchPercent =
+    entry._match != null && Number.isFinite(entry._match) ? `${Math.round(entry._match * 1000) / 10}%` : '–';
+  const scoreEl = document.createElement('div');
+  scoreEl.className = 'match-score';
+  scoreEl.textContent = matchPercent;
+  matchRowContent.appendChild(scoreEl);
+  if (matchHighlights.length) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ghost link-button';
+    btn.textContent = 'Yhteensopivuuspisteiden selitys';
+    const panel = document.createElement('div');
+    panel.className = 'modal match-explain-modal';
+    panel.hidden = true;
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    backdrop.addEventListener('click', () => {
+      panel.hidden = true;
+      document.body.classList.remove('modal-open');
+    });
+    const modalInner = document.createElement('div');
+    modalInner.className = 'modal-panel';
+    const header = document.createElement('header');
+    header.className = 'modal-header';
+    const h = document.createElement('h3');
+    h.textContent = 'Miksi tekoäly piti tästä nimestä?';
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'icon-button';
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', () => {
+      panel.hidden = true;
+      document.body.classList.remove('modal-open');
+    });
+    header.appendChild(h);
+    header.appendChild(closeBtn);
+    modalInner.appendChild(header);
+    const list = document.createElement('ul');
+    list.className = 'match-explain-list';
+    matchHighlights.forEach((text) => {
+      const li = document.createElement('li');
+      li.textContent = text;
+      list.appendChild(li);
+    });
+    modalInner.appendChild(list);
+    panel.appendChild(backdrop);
+    panel.appendChild(modalInner);
+    btn.addEventListener('click', () => {
+      panel.hidden = false;
+      document.body.classList.add('modal-open');
+    });
+    matchRowContent.appendChild(btn);
+    matchRowContent.appendChild(panel);
+  }
+  if (surnameEntry && matchRowContent.childNodes.length) {
+    const matchRow = createDetailRow('Sukunimiosuvuus', matchRowContent);
+    if (matchRow) details.appendChild(matchRow);
   }
 
-  if (shouldShowDetailAd()) {
+  if (surnameEntry) {
+    const comboContent = renderComboEstimate(entry, t, surnameEntry);
+    if (comboContent) {
+      const comboRow = createDetailRow(t.comboRowLabel, comboContent);
+      if (comboRow) details.appendChild(comboRow);
+    }
+  }
+
+  if (surnameEntry && shouldShowDetailAd()) {
     const ad = document.createElement('div');
     ad.className = 'ad-slot detail-ad';
     ad.textContent = 'Mainospaikka';
+    ad.hidden = true;
     details.appendChild(ad);
   }
 
@@ -2172,6 +2257,7 @@ function hydrateCardBody(card, container, entry, t, surnameEntry) {
   affiliateLink.textContent = 'Tilaa vauvan nimellä varustettu body';
   affiliateLink.target = '_blank';
   affiliateLink.rel = 'noopener';
+  affiliateLink.hidden = true;
   container.appendChild(affiliateLink);
 
   const historyContainer = historyChart;
@@ -2383,9 +2469,8 @@ const MATCH_COMPONENT_ORDER = [
   'rhythm',
   'length',
   'alliteration',
-  'junction',
-  'junction_transition',
   'head_transition',
+  'end_start_transition',
   'oddness'
 ];
 
@@ -2448,32 +2533,7 @@ function describeLengthTrait({ metrics, entry, name, mode, role }) {
 }
 
 function getSurnameUsageText(entry) {
-  if (!entry) return '';
-  const total = Number(entry.popularity);
-  const rankKey = (entry.name || '').toLowerCase();
-  let rank = surnameRankMap.get(rankKey);
-  if (!Number.isFinite(rank) && Number.isFinite(total)) {
-    // Fallback: estimate rank based on popularity ordering if map missing.
-    const sorted = [...surnameRankMap.entries()].sort((a, b) => a[1] - b[1]);
-    if (!sorted.length) {
-      rank = null;
-    } else {
-      const greater = sorted.filter(([_, r]) => r <= total).length;
-      rank = greater || null;
-    }
-  }
-  if (!Number.isFinite(total)) {
-    return '';
-  }
-  const formattedCount = formatNumberWithSpaces(total);
-  const usageBuilder = translations.fi?.surnameUsage;
-  if (typeof usageBuilder !== 'function') {
-    return formattedCount ? `Sukunimeä käyttää ${formattedCount} henkilöä.` : '';
-  }
-  if (!Number.isFinite(rank)) {
-    return `Sukunimeä käyttää ${formattedCount} henkilöä.`;
-  }
-  return usageBuilder(formattedCount, rank);
+  return formatSurnameUsage(entry, surnameRankMap, translations.fi?.surnameUsage);
 }
 
 function sanitizeNumericInput(value) {
@@ -2583,9 +2643,10 @@ function updateSurnameAnalysis(entry, missingSurname) {
   }
   const usageText = getSurnameUsageText(resolvedEntry);
   container.innerHTML = usageText
-    ? `<span class="surname-usage">${usageText}</span>`
+    ? `${usageText}`
     : 'Sukunimen käyttöä ei löytynyt.';
   container.title = '';
+  renderSurnameExplainLink(resolvedEntry);
 }
 
 function buildSurnameAnalysis(entry) {
@@ -2701,11 +2762,10 @@ function renderCombinedTraits(entry, t) {
     describe: (meta) => meta?.description || meta?.label || ''
   });
   const phoneticHtml = renderPhoneticSummary(entry, phoneticMeta, {
-    noHighlightsLabel: t.noPhoneticHighlights,
     labelFor: (meta) => getFeatureLabel(meta) || meta?.key,
     describe: (meta) => getFeatureDescription(meta?.key || '')
   });
-  return `${groupHtml} ${phoneticHtml}`;
+  return [groupHtml, phoneticHtml].filter(Boolean).join(' ');
 }
 
 function updateUrl() {
@@ -2718,8 +2778,8 @@ function updateUrl() {
     params.set('gender', Array.from(state.genders).join(','));
   }
   if (state.surname) params.set('surname', state.surname);
-  if (state.includeLetters) params.set('letters', state.includeLetters);
-  if (state.excludeLetters) params.set('exclude', state.excludeLetters);
+  if (state.includeLettersInput) params.set('letters', state.includeLettersInput);
+  if (state.excludeLettersInput) params.set('exclude', state.excludeLettersInput);
   if (
     state.letterRange.min !== LETTER_LIMITS.min ||
     state.letterRange.max !== LETTER_LIMITS.max
@@ -2747,6 +2807,8 @@ function updateUrl() {
   const query = params.toString();
   const newUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
   history.replaceState(null, '', newUrl);
+  updateFavoriteNavHref();
+  setAdSlotsEnabled('results', false);
 }
 
 function bindEvents() {
@@ -2762,6 +2824,7 @@ function bindEvents() {
       const entry = currentValue ? surnameMap.get(currentValue.toLowerCase()) : null;
       const missing = Boolean(currentValue && !entry);
       updateSurnameAnalysis(entry, missing);
+       updateFavoriteNavHref();
       clearTimeout(surnameInputTimer);
       surnameInputTimer = setTimeout(() => {
         applyFilters();
@@ -2774,6 +2837,24 @@ function bindEvents() {
       el.addEventListener('input', () => scheduleApplyFilters());
     }
   });
+  document.querySelectorAll('.hint-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.getAttribute('data-target');
+      if (!targetId) return;
+      const target = document.getElementById(targetId);
+      if (!target) return;
+      const isHidden = target.hasAttribute('hidden');
+      if (isHidden) {
+        target.removeAttribute('hidden');
+        btn.setAttribute('aria-expanded', 'true');
+        btn.textContent = 'Piilota lisäohjeet';
+      } else {
+        target.setAttribute('hidden', '');
+        btn.setAttribute('aria-expanded', 'false');
+        btn.textContent = 'Näytä lisäohjeita';
+      }
+    });
+  });
   $('#toggle-sort').addEventListener('click', () => {
     state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
     $('#toggle-sort').textContent = state.sortDir === 'asc' ? '↑' : '↓';
@@ -2785,13 +2866,36 @@ function bindEvents() {
   if (addGroupBtn) addGroupBtn.addEventListener('click', addGroupFilter);
   const addPopBtn = $('[data-action="add-popularity"]');
   if (addPopBtn) addPopBtn.addEventListener('click', addPopularityFilter);
+  document.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-filter-href]');
+    if (!btn) return;
+    const href = btn.getAttribute('data-filter-href');
+    if (!href) return;
+    event.preventDefault();
+    const url = new URL(href, window.location.origin);
+    const surnameValue = (state.surname || '').trim();
+    if (surnameValue) {
+      url.searchParams.set('surname', surnameValue);
+    }
+    if (state.genders.size && state.genders.size < 3) {
+      url.searchParams.set('gender', Array.from(state.genders).join(','));
+    }
+    url.searchParams.set('openArticles', '1');
+    url.hash = 'results';
+    sessionStorage.setItem(SCROLL_FLAG_KEY, '1');
+    const target = document.getElementById('results');
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    window.location.href = url.toString();
+  });
   document.querySelectorAll('input[name="gender"]').forEach((checkbox) => {
     checkbox.addEventListener('change', () => applyFilters());
   });
   const loadMoreBtn = $('#load-more');
   if (loadMoreBtn) {
     loadMoreBtn.addEventListener('click', () => {
-      const totalAvailable = getDisplayableCount();
+      const totalAvailable = getFilteredCount();
       state.visibleCount = Math.min(state.visibleCount + PAGE_SIZE, totalAvailable);
       renderResults();
     });
@@ -2805,7 +2909,37 @@ function bindEvents() {
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       closeStoryModal();
+      if (surnameExplainModal && !surnameExplainModal.hidden) {
+        closeSurnameExplain();
+      }
     }
+  });
+  surnameExplainModal = $('#surname-explain-modal');
+  if (surnameExplainModal) {
+    surnameExplainModal.hidden = true;
+  }
+  document.querySelectorAll('[data-action="dismiss-surname-explain"]').forEach((el) => {
+    el.addEventListener('click', closeSurnameExplain);
+  });
+}
+
+function closeSurnameExplain() {
+  if (!surnameExplainModal) return;
+  surnameExplainModal.hidden = true;
+  document.body.classList.remove('modal-open');
+}
+
+function scrollToResultsIfNeeded() {
+  if (hasScrolledToResults) return;
+  const shouldScroll =
+    window.location.hash === '#results' || sessionStorage.getItem(SCROLL_FLAG_KEY) === '1';
+  if (!shouldScroll) return;
+  const target = document.getElementById('results');
+  if (!target) return;
+  hasScrolledToResults = true;
+  sessionStorage.removeItem(SCROLL_FLAG_KEY);
+  requestAnimationFrame(() => {
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 }
 
@@ -2817,6 +2951,11 @@ async function init() {
   applySchemaLimits();
   initSelects();
   restoreFromQuery();
+  updateFavoriteNavHref();
+  registerAdSlots('results', ['.ad-inline-top', '.ad-rail']);
+  registerAdSlots('affiliate', ['.affiliate-link']);
+  setAdSlotsEnabled('results', false);
+  setAdSlotsEnabled('affiliate', false);
   initRangeControls();
   attachPopulationInputEvents();
   syncFormWithState();
@@ -2824,6 +2963,7 @@ async function init() {
   bindEvents();
   resetDetailAdCounter();
   applyFilters();
+  scrollToResultsIfNeeded();
 }
 
 document.addEventListener('DOMContentLoaded', () => {

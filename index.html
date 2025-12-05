@@ -10,15 +10,76 @@
     <!-- End Google Tag Manager -->
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Nimihaku</title>
+    <title>Nimi vauvalle</title>
+    <meta
+      name="description"
+      content="Suomen kattavin nimen valintatyökalu: löydä vauvallesi sopiva etunimi."
+    />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://nimivauvalle.fi/" />
+    <meta property="og:title" content="Nimi vauvalle – älykäs nimihaku" />
+    <meta
+      property="og:description"
+      content="Hae vauvan etunimeä, säädä fonetiikkapainotuksia ja katso, miten nimi sopii sukunimeen ääntämyksen ja suosion perusteella."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://nimivauvalle.fi/" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Mea+Culpa&display=swap"
       rel="stylesheet"
     />
+    <!-- Silktide Consent Manager -->
+    <link rel="stylesheet" id="silktide-consent-manager-css" href="cookie-banner/silktide-consent-manager.css" />
+    <script src="cookie-banner/silktide-consent-manager.js"></script>
+    <link rel="stylesheet" href="cookie-banner/consent-overrides.css" />
+    <script src="cookie-banner/consent-config.js"></script>
+    <script>initConsentBanner();</script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.0/dist/nouislider.min.css" />
     <link rel="stylesheet" href="styles.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Nimi vauvalle",
+        "url": "https://nimivauvalle.fi/",
+        "description": "Etsi vauvan nimi ja vertaa etu- ja sukunimien yhteensopivuutta, suosiota ja historiaa.",
+        "inLanguage": "fi"
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Mitä tietoja tallennetaan?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Sukunimiä ei tallenneta palvelimelle. Evästeet keräävät vain välttämättömät istuntotiedot. Analytiikka- ja mainosevästeet aktivoituvat vasta suostumuksellasi."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Miten pistelasku toimii?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Pistelasku yhdistää fonetiikan (vokaali- ja konsonanttiprofiilit, rytmi, painotus), yleisyyden ja valitsemasi painotukset. Negatiiviset painotukset vähentävät pisteitä, jos piirre on vahva."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Miksi näen mainoksia?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Mainoksia näytetään vain sivuilla, joilla on muutakin sisältöä kulujen kattamiseksi. Tyhjillä ruuduilla tai latausvirheissä mainospaikat pysyvät piilossa AdSense-politiikan mukaisesti."
+            }
+          }
+        ]
+      }
+    </script>
   </head>
   <body data-nav-label="Avaa suosikit" data-nav-href="favorites.html">
     <!-- Google Tag Manager (noscript) -->
@@ -37,6 +98,9 @@
           </p>
         </div>
       </header>
+      <section data-include="content/articles-strip.html">
+        <p class="hint">Ladataan artikkeleita…</p>
+      </section>
       <section class="filters" aria-labelledby="filters-title">
         <h2 id="filters-title">Millaista nimeä etsit?</h2>
         <form id="filter-form">
@@ -47,7 +111,7 @@
                 <legend>Nimen sukupuoli</legend>
                 <label><input type="checkbox" name="gender" value="female" checked /> Tyttö</label>
                 <label><input type="checkbox" name="gender" value="male" checked /> Poika</label>
-                <label><input type="checkbox" name="gender" value="unisex" checked /> Sukupuolineutraalit nimet</label>
+                <label><input type="checkbox" name="gender" value="unisex" checked /> Unisex</label>
               </fieldset>
               <label class="surname-field">
                 Kirjoita vauvan sukunimi
@@ -72,13 +136,25 @@
             <div class="letter-grid">
               <label>
                 Nimen tulee sisältää
-                <input type="text" id="letters-include" placeholder="Esim. ar" autocomplete="off" />
-                <span class="hint">Kirjoita merkit, jotka nimessä täytyy esiintyä.</span>
+                <input type="text" id="letters-include" placeholder="Esim. ai, ee, loo" autocomplete="off" />
+                <span class="hint">
+                  Nimessä tulee olla vähintään syötetyt kirjaimet. Esim. "aa" hyväksyy nimet, joissa on kaksi a-kirjainta. Pilkkua voi käyttää kuten tai. Esim. "aa, i" hyväksyy nimet, joissa on kaksi a-kirjainta tai yksi i-kirjain.
+                  <button type="button" class="link-button hint-toggle" data-target="letters-include-extra" aria-expanded="false">Näytä lisäohjeita</button>
+                  <span class="hint-extra" id="letters-include-extra" hidden>
+                    Lisäksi käytössä on erikoismerkit. Esim. "^aa": nimen täytyy alkaa aa:lla, "na$": nimen täytyy loppua na:han, "a*o": nimessä täytyy olla a:n jälkeen jossain vaiheessa o (tähti korvaa väliin tulevat kirjaimet).
+                  </span>
+                </span>
               </label>
               <label>
                 Nimen ei tule sisältää
-                <input type="text" id="letters-exclude" placeholder="Esim. zxq-" autocomplete="off" />
-                <span class="hint">Kirjoita merkit, joita nimessä ei saa olla.</span>
+                <input type="text" id="letters-exclude" placeholder="Esim. sh, st, zz" autocomplete="off" />
+                <span class="hint">
+                  Nimessä ei saa olla syötettyjä kirjaimia. Esim. "aa": nimessä ei saa olla kahta (tai useampaa) a:ta. Pilkkua voi käyttää kuten tai. Esim. "aa, i": nimessä ei saa olla vähintään kahta a:ta tai yhtä i:tä.
+                  <button type="button" class="link-button hint-toggle" data-target="letters-exclude-extra" aria-expanded="false">Näytä lisäohjeita</button>
+                  <span class="hint-extra" id="letters-exclude-extra" hidden>
+                    Lisäksi käytössä on erikoismerkit. Esim. "^a": nimi ei saa alkaa a:lla, "a$": nimi ei saa päättyä a:han, "a*o": nimessä ei saa olla a:n jälkeen o:ta (tähti korvaa väliin tulevat kirjaimet).
+                  </span>
+                </span>
               </label>
             </div>
             <div class="range-grid">
@@ -116,8 +192,8 @@
         </form>
       </section>
 
-      <section class="results" aria-live="polite">
-        <div class="ad-slot ad-inline-top" aria-label="Results ad placeholder">Mainospaikka</div>
+      <section class="results" id="results" aria-live="polite">
+        <div class="ad-slot ad-inline-top" aria-label="Results ad placeholder" hidden>Mainospaikka</div>
         <div class="results-ordering">
           <label class="sort-label">
             Järjestä
@@ -138,12 +214,13 @@
         </div>
       </section>
       <aside class="ad-rail ad-rail-fixed" aria-label="Side ad placeholder">
-        <div class="ad-slot ad-rail-slot">Mainospaikka</div>
+        <div class="ad-slot ad-rail-slot" hidden>Mainospaikka</div>
       </aside>
       <aside class="ad-rail ad-rail-scroll" aria-label="Side ad placeholder">
-        <div class="ad-slot ad-rail-slot">Mainospaikka</div>
+        <div class="ad-slot ad-rail-slot" hidden>Mainospaikka</div>
       </aside>
     </main>
+    <div data-include="footer.html"></div>
 
 
     <template id="phonetic-filter-template">
@@ -205,6 +282,19 @@
     <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.0/dist/nouislider.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/wnumb@1.2.0/wNumb.min.js"></script>
     <script type="module" src="app.js"></script>
+    <div id="surname-explain-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="surname-explain-title" hidden>
+      <div class="modal-backdrop" data-action="dismiss-surname-explain"></div>
+      <div class="modal-panel weight-editor-panel">
+        <header class="modal-header">
+          <div>
+            <p class="eyebrow">Sukunimen selitys</p>
+            <h2 id="surname-explain-title">Mitä tekoäly ajattelee sukunimestäsi?</h2>
+          </div>
+          <button type="button" class="icon-button" data-action="dismiss-surname-explain" aria-label="Sulje">x</button>
+        </header>
+        <div id="surname-explain-content" class="grid"></div>
+      </div>
+    </div>
 
     <div id="story-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="story-title" hidden>
       <div class="modal-backdrop" data-action="dismiss-story"></div>
@@ -223,5 +313,9 @@
         </p>
       </div>
     </div>
+    <script type="module">
+      import { initPageChrome } from './site.js';
+      initPageChrome({ enhanceArticles: true, openArticlesFromQuery: true, scrollToHash: true });
+    </script>
   </body>
 </html>

@@ -1,0 +1,254 @@
+# Silktide Consent Manager overrides aligned with site styling
+:root {
+  --silktide-accent: var(--accent, #ff7d6e);
+  --silktide-bg: var(--bg, #fefbf7);
+  --silktide-text: var(--text, #1f2230);
+  --silktide-muted: var(--muted, #6f7486);
+  --silktide-border: var(--border, #e7e4ef);
+}
+
+#silktide-wrapper {
+  --fontFamily: var(--body-font, "Quicksand", "Helvetica Neue", Arial, sans-serif) !important;
+  --primaryColor: var(--silktide-accent) !important;
+  --backgroundColor: var(--silktide-bg) !important;
+  --textColor: var(--silktide-text) !important;
+  --cookieIconColor: var(--silktide-bg) !important;
+  --cookieIconBackgroundColor: var(--silktide-accent) !important;
+  --boxShadow: 0 10px 32px rgba(26, 37, 60, 0.08) !important;
+}
+
+/* Cookie icon */
+#silktide-cookie-icon {
+  width: 45px !important;
+  height: 45px !important;
+  border-radius: 50% !important;
+  overflow: hidden;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--accent-muted, #ffe6e1) !important;
+  border: 1px solid var(--silktide-border) !important;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
+}
+#silktide-cookie-icon svg,
+#silktide-cookie-icon svg * {
+  width: 38px !important;
+  height: 38px !important;
+  fill: none !important;
+}
+#silktide-wrapper #silktide-cookie-icon:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(255, 125, 110, 0.35) !important;
+  border-color: var(--silktide-accent) !important;
+  border-radius: 50% !important;
+}
+
+/* Panels and backdrop */
+#silktide-backdrop-global,
+#silktide-backdrop {
+  background: rgba(7, 9, 20, 0.35) !important;
+  backdrop-filter: none !important;
+  opacity: 1 !important;
+}
+#silktide-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+}
+
+/* Cookie modal layout */
+#silktide-modal {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  overflow: visible !important;
+  align-items: center;
+  justify-content: center;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+  opacity: 1 !important;
+  z-index: 2147483646 !important;
+}
+
+#silktide-modal[aria-hidden="true"] {
+  display: none !important;
+}
+
+#silktide-modal[aria-hidden="false"],
+#silktide-wrapper.modal-open #silktide-modal {
+  display: flex !important;
+}
+
+#silktide-modal .cookie-modal-panel {
+  width: min(720px, 90vw);
+  max-height: min(90vh, 720px);
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid var(--silktide-border);
+  box-shadow: 0 12px 36px rgba(26, 37, 60, 0.12);
+  background: var(--panel-bg, #fff);
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+  z-index: 2147483647 !important;
+}
+
+#silktide-modal,
+#silktide-modal * {
+  animation: none !important;
+}
+
+#silktide-modal .modal-header {
+  align-items: center;
+  margin-bottom: 0;
+}
+
+#silktide-modal h2 {
+  margin: 0;
+}
+
+#silktide-modal .cookie-modal-description {
+  margin-top: 0;
+}
+
+#silktide-modal .cookie-modal-description p {
+  margin: 0 0 0.5rem;
+  color: var(--silktide-muted);
+}
+
+#silktide-modal .cookie-modal-description p:last-child {
+  margin-bottom: 0;
+}
+
+#silktide-modal #cookie-preferences {
+  padding: 0;
+  margin: 0;
+  flex: 1 1 auto;
+}
+
+#silktide-modal section#cookie-preferences {
+  margin-top: 0;
+}
+
+#silktide-modal .cookie-type-row {
+  background: #fff;
+}
+
+#silktide-modal .cookie-type-content {
+  align-items: center;
+  gap: 1rem;
+}
+
+@media (max-width: 540px) {
+  #silktide-modal .cookie-type-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+#silktide-modal .cookie-modal-actions {
+  border-top: 1px solid var(--silktide-border);
+  padding-top: 1rem;
+  margin-top: 0.25rem;
+  align-items: center;
+  gap: 0.5rem;
+  flex-direction: row;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+#silktide-modal .cookie-modal-actions .silktide-attribution {
+  margin: 0;
+}
+
+#silktide-modal button:focus,
+#silktide-modal button:active,
+#silktide-wrapper #silktide-modal button:focus,
+#silktide-wrapper #silktide-modal button:active {
+  box-shadow: none !important;
+  border-radius: 999px !important;
+  outline: none !important;
+}
+
+/* Close button */
+#silktide-modal .modal-close {
+  width: 40px !important;
+  height: 40px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 50% !important;
+  background: #fff !important;
+  color: var(--muted) !important;
+  font-size: 1.3rem !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Switches */
+#silktide-modal .switch__pill {
+  background: #fff !important;
+  border: 1px solid var(--silktide-border) !important;
+}
+#silktide-modal .switch:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+#silktide-modal .switch__dot {
+  background: var(--silktide-text) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+}
+#silktide-modal .switch__off,
+#silktide-modal .switch__on {
+  color: var(--silktide-text) !important;
+}
+#silktide-modal .switch input:checked + .switch__pill {
+  background: var(--silktide-accent) !important;
+  border-color: var(--silktide-accent) !important;
+}
+#silktide-modal .switch input:checked ~ .switch__on {
+  color: var(--silktide-text) !important;
+}
+#silktide-modal .switch input:checked ~ .switch__off {
+  color: var(--silktide-muted) !important;
+}
+#silktide-modal .switch input:checked ~ .switch__dot {
+  background: var(--silktide-text) !important;
+}
+
+/* Links */
+#silktide-modal a {
+  color: var(--accent, #ff7d6e) !important;
+  text-decoration: underline;
+  font-weight: 600;
+}
+#silktide-modal a:hover {
+  color: #e86c5e !important;
+}
+
+/* Hide default Silktide credit, keep our attribution */
+#silktide-wrapper a[href*="silktide"]:not(.silktide-attribution) {
+  display: none !important;
+}
+
+.silktide-attribution {
+  display: inline;
+  font-size: 0.9rem;
+  color: var(--silktide-accent);
+  text-decoration: underline;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  margin-left: 0;
+}
+.silktide-attribution:hover {
+  color: var(--silktide-text);
+  text-decoration: underline;
+}
