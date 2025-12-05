@@ -1582,17 +1582,9 @@ function renderSurnameExplainLink(entry) {
   const container = document.getElementById('surname-analysis');
   if (!container) return;
   if (!link) {
-    link = document.createElement('button');
-    link.id = 'surname-explain-link';
-    link.type = 'button';
-    link.className = 'ghost link-button';
-    link.textContent = 'Katso, mitä tekoäly ajattelee sukunimestä.';
-    link.hidden = false;
-    link.addEventListener('click', () => openSurnameExplain(entry));
-    container.appendChild(link);
+    return;
   } else {
-    link.onclick = () => openSurnameExplain(entry);
-    link.hidden = false;
+    link.remove();
   }
 }
 
@@ -2141,68 +2133,6 @@ function hydrateCardBody(card, container, entry, t, surnameEntry) {
     if (groupRow) details.appendChild(groupRow);
   }
 
-  const matchHighlights = buildMatchHighlights(entry, surnameEntry);
-  const matchRowContent = document.createElement('div');
-  matchRowContent.className = 'match-explain';
-  const matchPercent =
-    entry._match != null && Number.isFinite(entry._match) ? `${Math.round(entry._match * 1000) / 10}%` : '–';
-  const scoreEl = document.createElement('div');
-  scoreEl.className = 'match-score';
-  scoreEl.textContent = matchPercent;
-  matchRowContent.appendChild(scoreEl);
-  if (matchHighlights.length) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'ghost link-button';
-    btn.textContent = 'Yhteensopivuuspisteiden selitys';
-    const panel = document.createElement('div');
-    panel.className = 'modal match-explain-modal';
-    panel.hidden = true;
-    const backdrop = document.createElement('div');
-    backdrop.className = 'modal-backdrop';
-    backdrop.addEventListener('click', () => {
-      panel.hidden = true;
-      document.body.classList.remove('modal-open');
-    });
-    const modalInner = document.createElement('div');
-    modalInner.className = 'modal-panel';
-    const header = document.createElement('header');
-    header.className = 'modal-header';
-    const h = document.createElement('h3');
-    h.textContent = 'Miksi tekoäly piti tästä nimestä?';
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'icon-button';
-    closeBtn.textContent = '×';
-    closeBtn.addEventListener('click', () => {
-      panel.hidden = true;
-      document.body.classList.remove('modal-open');
-    });
-    header.appendChild(h);
-    header.appendChild(closeBtn);
-    modalInner.appendChild(header);
-    const list = document.createElement('ul');
-    list.className = 'match-explain-list';
-    matchHighlights.forEach((text) => {
-      const li = document.createElement('li');
-      li.textContent = text;
-      list.appendChild(li);
-    });
-    modalInner.appendChild(list);
-    panel.appendChild(backdrop);
-    panel.appendChild(modalInner);
-    btn.addEventListener('click', () => {
-      panel.hidden = false;
-      document.body.classList.add('modal-open');
-    });
-    matchRowContent.appendChild(btn);
-    matchRowContent.appendChild(panel);
-  }
-  if (surnameEntry && matchRowContent.childNodes.length) {
-    const matchRow = createDetailRow('Sukunimiosuvuus', matchRowContent);
-    if (matchRow) details.appendChild(matchRow);
-  }
-
   if (surnameEntry) {
     const comboContent = renderComboEstimate(entry, t, surnameEntry);
     if (comboContent) {
@@ -2686,25 +2616,12 @@ function buildFirstNameAnalysis(entry, surnameEntry) {
   const traitSentences = buildSurnameTraitSentences(entry, 'analysis', 'first')
     .map((item) => item.text)
     .filter(Boolean);
-  const evaluation = surnameEntry ? evaluateMatchComponents(entry, surnameEntry) : null;
-  const matchLine = evaluation
-    ? `Sukunimiosuvuus: ${(evaluation.normalized * 100).toFixed(1)} %`
-    : '';
   const analysisText = traitSentences.join(' ');
   if (analysisText) {
     const analysisP = document.createElement('p');
     analysisP.className = 'analysis-text';
     analysisP.textContent = analysisText;
     container.appendChild(analysisP);
-  }
-  if (evaluation) {
-    const parts = [matchLine, formatComponentBreakdown(evaluation.components)].filter(Boolean);
-    if (parts.length) {
-      const compP = document.createElement('p');
-      compP.className = 'analysis-components';
-      compP.textContent = parts.join(' — ');
-      container.appendChild(compP);
-    }
   }
   return container.childNodes.length ? container : null;
 }

@@ -48,8 +48,11 @@ export function createCardShell(entry, options) {
   tagsWrap.appendChild(createSummaryTag(matchText, 'tag-match'));
 
   let comboText = '';
-  if (entry._comboEstimate && surnameEntry && t?.comboTag) {
-    comboText = t.comboTag(entry._comboEstimate.toLocaleString('fi-FI'));
+  if (surnameEntry && entry._comboEstimate != null && t?.comboTag) {
+    const roundedCombo = Math.round(entry._comboEstimate);
+    if (roundedCombo >= 1) {
+      comboText = t.comboTag(roundedCombo);
+    }
   }
   tagsWrap.appendChild(createSummaryTag(comboText, 'tag-combo'));
 
