@@ -1,5 +1,31 @@
 import { loadContentBlocks } from './content-loader.js';
 
+const GA_MEASUREMENT_ID = 'G-88PNGZ7WGM';
+
+function injectAnalyticsTag() {
+  if (!GA_MEASUREMENT_ID) return;
+  if (!window.dataLayer) {
+    window.dataLayer = [];
+  }
+  if (typeof window.gtag !== 'function') {
+    window.gtag = function gtag() {
+      window.dataLayer.push(arguments);
+    };
+    const scriptId = 'ga-measurement-script';
+    if (!document.getElementById(scriptId)) {
+      const gaScript = document.createElement('script');
+      gaScript.async = true;
+      gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`;
+      gaScript.id = scriptId;
+      document.head.appendChild(gaScript);
+    }
+    window.gtag('js', new Date());
+  }
+  window.gtag('config', GA_MEASUREMENT_ID);
+}
+
+injectAnalyticsTag();
+
 export async function initPageChrome(options = {}) {
   const {
     loadContent = true,
