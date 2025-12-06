@@ -46,7 +46,7 @@
 /* Panels and backdrop */
 #silktide-backdrop-global,
 #silktide-backdrop {
-  background: rgba(7, 9, 20, 0.35) !important;
+  background: rgba(7, 9, 20, 0.55) !important;
   backdrop-filter: none !important;
   opacity: 1 !important;
 }
@@ -64,8 +64,6 @@
   max-width: none !important;
   max-height: none !important;
   overflow: visible !important;
-  align-items: center;
-  justify-content: center;
   padding: 0 !important;
   background: transparent !important;
   border: none !important;
@@ -75,27 +73,22 @@
   z-index: 2147483646 !important;
 }
 
-#silktide-modal[aria-hidden="true"] {
-  display: none !important;
-}
-
-#silktide-modal[aria-hidden="false"],
-#silktide-wrapper.modal-open #silktide-modal {
-  display: flex !important;
-}
-
 #silktide-modal .cookie-modal-panel {
   width: min(720px, 90vw);
   max-height: min(90vh, 720px);
   overflow: hidden;
-  border-radius: 14px;
+  border-radius: 1.2rem;
   border: 1px solid var(--silktide-border);
-  box-shadow: 0 12px 36px rgba(26, 37, 60, 0.12);
-  background: var(--panel-bg, #fff);
+  box-shadow: 0 35px 90px rgba(8, 12, 32, 0.22);
+  background: #fff !important;
   opacity: 1 !important;
   transform: none !important;
   filter: none !important;
   z-index: 2147483647 !important;
+  padding: clamp(1rem, 3vw, 1.5rem) !important;
+  display: flex !important;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 #silktide-modal,
@@ -113,7 +106,8 @@
 }
 
 #silktide-modal .cookie-modal-description {
-  margin-top: 0;
+  margin: 0;
+  padding: 0;
 }
 
 #silktide-modal .cookie-modal-description p {
@@ -133,10 +127,17 @@
 
 #silktide-modal section#cookie-preferences {
   margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 #silktide-modal .cookie-type-row {
   background: #fff;
+  padding: 1rem;
+  margin: 0;
+  border: 1px solid var(--silktide-border);
+  border-radius: 0.9rem;
 }
 
 #silktide-modal .cookie-type-content {
@@ -154,7 +155,7 @@
 #silktide-modal .cookie-modal-actions {
   border-top: 1px solid var(--silktide-border);
   padding-top: 1rem;
-  margin-top: 0.25rem;
+  margin-top: 0;
   align-items: center;
   gap: 0.5rem;
   flex-direction: row;
@@ -195,6 +196,9 @@
 #silktide-modal .switch__pill {
   background: #fff !important;
   border: 1px solid var(--silktide-border) !important;
+}
+#silktide-modal fieldset.weight-row.cookie-type-row {
+  background: var(--panel-bg, #fff) !important;
 }
 #silktide-modal .switch:focus-within {
   outline: none !important;

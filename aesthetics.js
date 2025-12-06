@@ -12,8 +12,7 @@ import {
 } from './weight-utils.js';
 
 const WORKER_PATH = './aesthetics-worker.js';
-const TOP_K_DEFAULT = 5000;
-const PAGE_SIZE = 100;
+const PAGE_SIZE = Number.POSITIVE_INFINITY;
 
 let worker = null;
 let firstIndex = null;
@@ -31,6 +30,7 @@ let datasetReady = false;
 let weightModal = null;
 let weightEditorInputs = [];
 let weightPercentBudget = 1;
+let orderDir = 'desc';
 
 const defaultWeights = {
   vowel_location: 0.1,
@@ -103,20 +103,35 @@ function setStatus(text) {
   if (el) el.textContent = text || '';
 }
 
+function updateOrderToggle() {
+  const btn = $('#ae-toggle-order');
+  if (btn) {
+    btn.textContent = orderDir === 'desc' ? 'Parhaat ensin' : 'Huonoimmat ensin';
+  }
+}
+
+function applyOrdering(pairs = []) {
+  const list = [...pairs];
+  list.sort((a, b) => (orderDir === 'desc' ? b.score - a.score : a.score - b.score));
+  return list;
+}
+
 function renderResults(pairs) {
-  currentPairs = pairs || [];
-  visiblePairs = Math.min(visiblePairs, currentPairs.length || PAGE_SIZE);
+  currentPairs = applyOrdering(pairs || currentPairs || []);
+  visiblePairs = currentPairs.length;
   const slice = currentPairs.slice(0, visiblePairs);
   const body = $('#results-body');
   if (!body) return;
   body.innerHTML = '';
+  const total = currentPairs.length;
   slice.forEach((entry, idx) => {
     const tr = document.createElement('tr');
     const first = fixedFirstName
       ? { display: fixedFirstName, name: fixedFirstLookup || fixedFirstName }
       : firstIndex?.[entry.firstId];
     const last = lastIndex?.[entry.lastId];
-    tr.innerHTML = `<td>${idx + 1}</td><td>${first?.display ?? first?.name ?? fixedFirstName ?? '-'}</td><td>${last?.display ?? last?.name ?? '-'}</td><td>${entry.score.toFixed(3)}</td>`;
+    const rank = orderDir === 'desc' ? idx + 1 : Math.max(1, total - idx);
+    tr.innerHTML = `<td>${rank}</td><td>${first?.display ?? first?.name ?? fixedFirstName ?? '-'}</td><td>${last?.display ?? last?.name ?? '-'}</td><td>${entry.score.toFixed(3)}</td>`;
     body.appendChild(tr);
   });
   updateLoadMoreButtons();
@@ -127,7 +142,7 @@ function handleWorkerMessage(event) {
   if (type === 'progress') {
     setStatus(`Käsitellään nimiä… ${value}/${total}`);
   } else if (type === 'result') {
-    setStatus('');
+    setStatus('Valmis');
     renderResults(pairs || []);
   } else if (type === 'error') {
     setStatus(message || 'Virhe');
@@ -135,7 +150,7 @@ function handleWorkerMessage(event) {
 }
 
 async function onComputeGlobal() {
-  setStatus('Lasketaan paras 5000 paria…');
+  setStatus('Lasketaan kaikki parit…');
   currentMode = 'global';
   fixedFirstName = null;
   fixedFirstLookup = null;
@@ -145,7 +160,7 @@ async function onComputeGlobal() {
   const topFirst = Number.parseInt($('#top-first')?.value, 10) || 1000;
   const topLast = Number.parseInt($('#top-last')?.value, 10) || 2000;
   await ensureDataset(topFirst, topLast);
-  ensureWorker().postMessage({ type: 'compute-best', weights, topK: TOP_K_DEFAULT, topFirst, topLast });
+  ensureWorker().postMessage({ type: 'compute-best', weights, topFirst, topLast });
 }
 
 async function onComputeForFirst(nameParam) {
@@ -163,22 +178,25 @@ async function onComputeForFirst(nameParam) {
   currentPairs = [];
   visiblePairs = PAGE_SIZE;
   renderResults([]);
-  const topFirst = Number.parseInt($('#top-first')?.value, 10) || 1000;
-  const topLast = Number.parseInt($('#top-last')?.value, 10) || 2000;
+  const topFirstInput = Number.parseInt($('#top-first')?.value, 10) || 1000;
+  const topLastInput = Number.parseInt($('#top-last')?.value, 10) || 2000;
+  const topFirstAll = Array.isArray(datasetCache?.names) ? datasetCache.names.length : topFirstInput;
+  const topLastAll = Array.isArray(datasetCache?.surnames) ? datasetCache.surnames.length : topLastInput;
+  const topFirst = topFirstAll || topFirstInput;
+  const topLast = topLastAll || topLastInput;
   await ensureDataset(topFirst, topLast);
   if (!firstIndex.find((entry) => (entry.name || '').toLowerCase() === lookupName)) {
     setStatus('Etunimeä ei löydy valitun top-listan joukosta');
     return;
   }
-  ensureWorker().postMessage({ type: 'compute-first', weights, firstName: lookupName, topK: 200, topFirst, topLast });
+  ensureWorker().postMessage({ type: 'compute-first', weights, firstName: lookupName, topFirst, topLast });
 }
 
 function updateLoadMoreButtons() {
   const btn = $('#load-more-global');
   if (btn) {
-    const more = currentPairs.length > visiblePairs;
-    btn.disabled = !more;
-    btn.hidden = !more;
+    btn.disabled = true;
+    btn.hidden = true;
   }
 }
 
@@ -316,7 +334,8 @@ function updateFirstNameStatus() {
     status.textContent = 'Jätä tyhjäksi, jos haluat etsiä parhaat parit kaikille etunimille.';
     return;
   }
-  const match = firstIndex.find((entry) => entry.name === name);
+  const source = Array.isArray(datasetCache?.names) ? datasetCache.names : firstIndex;
+  const match = source?.find((entry) => (entry.name || '').toLowerCase() === name);
   if (!match) {
     status.textContent = 'Etunimeä ei löydy.';
     return null;
@@ -329,7 +348,14 @@ function updateFirstNameStatus() {
 function wireEvents() {
   const globalBtn = $('#compute-global');
   if (globalBtn) {
-    globalBtn.addEventListener('click', onComputeGlobal);
+    globalBtn.addEventListener('click', () => {
+      const name = ($('#first-name-input')?.value || '').trim();
+      if (name) {
+        onComputeForFirst(name);
+      } else {
+        onComputeGlobal();
+      }
+    });
   }
   const loadMoreGlobal = $('#load-more-global');
   if (loadMoreGlobal) {
@@ -355,10 +381,17 @@ function wireEvents() {
   const firstInput = $('#first-name-input');
   if (firstInput) {
     firstInput.addEventListener('input', () => {
-      const match = updateFirstNameStatus();
-      const name = firstInput.value.trim().toLowerCase();
-      if (match && name) onComputeForFirst(name);
+      updateFirstNameStatus();
     });
+  }
+  const orderToggle = $('#ae-toggle-order');
+  if (orderToggle) {
+    orderToggle.addEventListener('click', () => {
+      orderDir = orderDir === 'desc' ? 'asc' : 'desc';
+      updateOrderToggle();
+      renderResults();
+    });
+    updateOrderToggle();
   }
 }
 
@@ -367,8 +400,7 @@ async function init() {
   await ensureDataset();
   updateFirstNameStatus();
   wireEvents();
-  setStatus('Valmis');
-  onComputeGlobal().catch(() => {});
+  setStatus('Valmis. Paina laskentaa aloittaaksesi.');
 }
 
 document.addEventListener('DOMContentLoaded', init);

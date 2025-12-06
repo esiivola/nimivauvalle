@@ -43,7 +43,7 @@ const translations = {
     noResults: 'Valituilla rajauksilla ei löytynyt yhtään nimeä.',
     match: (surname) => surname ? `Vauvan sukunimi on “${surname}”` : 'Sukunimiyhteensopivuus pois käytöstä',
     missingSurname: (surname) => `Sukunimeä “${surname}” ei löytynyt aineistosta - vertailu ohitettiin.`,
-    matchLabel: 'Sukunimi-osuvuus',
+    matchLabel: 'Sukunimiosuvuus',
     grade: (label) => `Taso: ${label}`,
     historyTitle: 'Nimen käyttö historiassa',
     historyLinkText: 'linkki',
@@ -65,7 +65,7 @@ const translations = {
     ageDistributionYAxis: 'Henkilöitä (arvio)',
     ageDistributionNoData: 'Ei ikäjakaumatietoa',
     surnameAnalysisTitle: 'Sukunimen äänneprofiili',
-    surnameAnalysisNote: 'Perustuu samoihin vokaali-, sävy- ja rytmiparametreihin kuin sukunimi-osuvuus.',
+    surnameAnalysisNote: 'Perustuu samoihin vokaali-, sävy- ja rytmiparametreihin kuin sukunimiosuvuus.',
     surnameAnalysisMissing: 'Sukunimeä ei löytynyt tilastoista. Käytä vertailua harkiten.',
     surnameUsage: (count, rank) => `Sukunimeä käyttää ${count} henkilöä ja se on ${rank}:s yleisin.`,
     firstNameAnalysisTitle: 'Etunimen äänneprofiili',
@@ -283,8 +283,7 @@ function buildMetaMaps() {
     .filter(
       (group) =>
         !String(group.key || '').startsWith('popular_') &&
-        !String(group.key || '').startsWith('trend_') &&
-        group.key !== 'evergreen'
+        !String(group.key || '').startsWith('trend_')
     )
     .map((g) => g.key);
   gradeMeta = data.schema.intensityGrades || [];
@@ -1016,6 +1015,7 @@ function getActiveFilterChips() {
       text: `${label} (${modeText})`,
       remove: () => {
         state.groupFilters = state.groupFilters.filter((f) => f.id !== filter.id);
+        renderFeatureFilters();
         applyFilters(true);
       }
     });
@@ -1029,6 +1029,7 @@ function getActiveFilterChips() {
       text: `${label} (${descriptor})`,
       remove: () => {
         state.phoneticFilters = state.phoneticFilters.filter((f) => f.id !== filter.id);
+        renderFeatureFilters();
         applyFilters(true);
       }
     });
@@ -1922,49 +1923,53 @@ function shouldShowDetailAd() {
 function createFilteredGroupPlaceholder(filteredEntries, t, surnameEntry, blockId) {
   const wrapper = document.createElement('div');
   wrapper.className = 'filtered-divider';
-  if (!filteredEntries.length) {
-    const top = document.createElement('div');
-    top.className = 'filtered-line';
-    wrapper.appendChild(top);
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'ghost small filtered-toggle';
-    button.textContent = 'Suodatetut nimet on piilotettu';
-    wrapper.appendChild(button);
-    const bottom = document.createElement('div');
-    bottom.className = 'filtered-line';
-    wrapper.appendChild(bottom);
-    return wrapper;
+  if (blockId) {
+    wrapper.dataset.blockId = blockId;
   }
-  const line = document.createElement('div');
-  line.className = 'filtered-line';
-  wrapper.appendChild(line);
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'ghost small filtered-toggle';
-  button.textContent = `${filteredEntries.length} nimeä suodatettu, klikkaa näyttääksesi`;
-  button.addEventListener('click', () => {
-    expandedFilteredBlocks.add(blockId);
-    renderResults();
-  });
+  if (!filteredEntries.length) {
+    button.textContent = 'Suodatetut nimet on piilotettu';
+  } else {
+    button.textContent = `${filteredEntries.length} nimeä suodatettu, klikkaa näyttääksesi`;
+    button.addEventListener('click', () => {
+      expandedFilteredBlocks.add(blockId);
+      renderResults();
+    });
+  }
   wrapper.appendChild(button);
-  const bottomLine = document.createElement('div');
-  bottomLine.className = 'filtered-line';
-  wrapper.appendChild(bottomLine);
   return wrapper;
+}
+
+function scrollFilteredPlaceholderIntoView(blockId, previousTop) {
+  if (!blockId || previousTop == null) return;
+  requestAnimationFrame(() => {
+    const placeholder = document.querySelector(
+      `.filtered-divider[data-block-id="${blockId}"] .filtered-toggle`
+    );
+    if (!placeholder) return;
+    const newTop = placeholder.getBoundingClientRect().top;
+    window.scrollBy({ top: newTop - previousTop });
+  });
 }
 
 function createExpandedFilteredGroup(filteredEntries, t, surnameEntry, blockId) {
   const expanded = document.createElement('div');
   expanded.className = 'filtered-expanded';
+  if (blockId) {
+    expanded.dataset.blockId = blockId;
+  }
   const makeCollapse = () => {
     const collapse = document.createElement('button');
     collapse.type = 'button';
     collapse.className = 'ghost small filtered-toggle';
     collapse.textContent = 'Piilota suodatetut nimet';
     collapse.addEventListener('click', () => {
+      const previousTop = collapse.getBoundingClientRect().top;
       expandedFilteredBlocks.delete(blockId);
       renderResults();
+      scrollFilteredPlaceholderIntoView(blockId, previousTop);
     });
     return collapse;
   };

@@ -818,18 +818,10 @@ class SilktideCookieBanner {
 
   function updateCookieBannerConfig(userConfig = {}) {
     config = {...config, ...userConfig};
-
-    // If cookie banner exists, destroy and recreate it with new config
-    if (cookieBanner) {
-      cookieBanner.destroyCookieBanner(); // We'll need to add this method
-      cookieBanner = null;
-    }
-
-    // Only initialize if document.body exists
+    if (cookieBanner) return;
     if (document.body) {
       initCookieBanner();
     } else {
-      // Wait for DOM to be ready
       document.addEventListener('DOMContentLoaded', initCookieBanner, {once: true});
     }
   }
@@ -863,10 +855,4 @@ class SilktideCookieBanner {
   window.silktideCookieBannerManager.initCookieBanner = initCookieBanner;
   window.silktideCookieBannerManager.updateCookieBannerConfig = updateCookieBannerConfig;
   window.silktideCookieBannerManager.injectScript = injectScript;
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initCookieBanner, {once: true});
-  } else {
-    initCookieBanner();
-  }
 })();

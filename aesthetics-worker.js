@@ -40,6 +40,10 @@ function normalizeWeights(weights) {
 }
 
 function pushTop(heap, item, limit) {
+  if (!Number.isFinite(limit) || limit === Infinity) {
+    heap.push(item);
+    return;
+  }
   heap.push(item);
   let idx = heap.length - 1;
   while (idx > 0) {
@@ -72,6 +76,7 @@ function heapToSortedDesc(heap) {
 async function computeBestPairs(weightsIn, topK, topFirst, topLast) {
   await ensureData(topFirst, topLast);
   const weights = normalizeWeights(weightsIn || {});
+  const limit = Number.isFinite(topK) ? topK : Number.POSITIVE_INFINITY;
   const heap = [];
   for (let firstId = 0; firstId < firstEntries.length; firstId += 1) {
     const first = firstEntries[firstId];
@@ -79,7 +84,7 @@ async function computeBestPairs(weightsIn, topK, topFirst, topLast) {
       const last = lastEntries[lastId];
       const result = computePairScore(first, last, weights, model);
       const score = result ? result.normalized : 0;
-      pushTop(heap, { firstId, lastId, score }, topK);
+      pushTop(heap, { firstId, lastId, score }, limit);
     }
     if (firstId % 50 === 0) {
       postMessage({ type: 'progress', value: firstId + 1, total: firstEntries.length });
@@ -101,20 +106,19 @@ async function computeBestForFirst(weightsIn, firstName, topK) {
       const result = computePairScore(target, last, weights, model);
       return { firstId: targetId, lastId, score: result ? result.normalized : 0 };
     })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, topK);
+    .sort((a, b) => b.score - a.score);
   return pairs;
 }
 
 self.onmessage = async (event) => {
-  const { type, weights, topK = 5000, firstName, topFirst = 3000, topLast = 3000 } = event.data || {};
+  const { type, weights, topK, firstName, topFirst = 3000, topLast = 3000 } = event.data || {};
   try {
     await ensureData(topFirst, topLast);
     if (type === 'compute-best') {
       const pairs = await computeBestPairs(weights, topK, topFirst, topLast);
       postMessage({ type: 'result', pairs });
     } else if (type === 'compute-first') {
-      const pairs = await computeBestForFirst(weights, firstName, Math.min(topK, 300));
+      const pairs = await computeBestForFirst(weights, firstName, topK);
       postMessage({ type: 'result', pairs });
     }
   } catch (err) {

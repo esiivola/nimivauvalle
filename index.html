@@ -35,7 +35,6 @@
     <script src="cookie-banner/silktide-consent-manager.js"></script>
     <link rel="stylesheet" href="cookie-banner/consent-overrides.css" />
     <script src="cookie-banner/consent-config.js"></script>
-    <script>initConsentBanner();</script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/nouislider@15.7.0/dist/nouislider.min.css" />
     <link rel="stylesheet" href="styles.css" />
     <script type="application/ld+json">
@@ -194,18 +193,20 @@
 
       <section class="results" id="results" aria-live="polite">
         <div class="ad-slot ad-inline-top" aria-label="Results ad placeholder" hidden>Mainospaikka</div>
-        <div class="results-ordering">
-          <label class="sort-label">
-            Järjestä
-            <select id="sort-key"></select>
-          </label>
-          <button class="ghost" type="button" id="toggle-sort">↓</button>
-        </div>
-        <div class="results-bar">
-          <div>
-            <strong id="result-count">Ladataan nimiä…</strong>
-            <span id="match-context"></span>
-            <div id="active-filters" class="filter-summary"></div>
+        <div class="results-meta">
+          <div class="results-bar">
+            <div>
+              <strong id="result-count">Ladataan nimiä…</strong>
+              <span id="match-context"></span>
+              <div id="active-filters" class="filter-summary"></div>
+            </div>
+          </div>
+          <div class="results-ordering">
+            <label class="sort-label">
+              Järjestä
+              <select id="sort-key"></select>
+            </label>
+            <button class="ghost" type="button" id="toggle-sort">↓</button>
           </div>
         </div>
         <div id="results-list" class="name-list" aria-live="polite"></div>

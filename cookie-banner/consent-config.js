@@ -89,7 +89,20 @@
   }
 
   window.initConsentBanner = function initConsentBanner() {
+    if (window.__consentBannerInitialized) return;
+    window.__consentBannerInitialized = true;
+    // Remove any stray wrappers from earlier inits
+    document.querySelectorAll('#silktide-wrapper').forEach((node) => node.remove());
     applyDefaultConsent();
     silktideCookieBannerManager.updateCookieBannerConfig(cookieBannerConfig);
+    // Deduplicate in case any legacy instance existed
+    const wrappers = Array.from(document.querySelectorAll('#silktide-wrapper'));
+    wrappers.slice(1).forEach((node) => node.remove());
   };
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    window.initConsentBanner();
+  } else {
+    document.addEventListener('DOMContentLoaded', window.initConsentBanner, { once: true });
+  }
 })();

@@ -58,9 +58,10 @@ let currentMatchWeights = {};
 let weightModal = null;
 let weightEditorInputs = [];
 let weightPercentBudget = 1;
+let backLinkSearch = '';
 const WEIGHT_SUM_TOLERANCE = 0.05;
 const FAVORITES_T = {
-  matchLabel: 'Sukunimi-osuvuus',
+  matchLabel: 'Sukunimiosuvuus',
   comboTag: (count) => `Täyskaimoja: ~${count}`,
   surnameMissing: (label) => `Sukunimeä “${label}” ei löytynyt aineistosta - vertailu ohitetaan.`,
   surnameMatch: (label) => (label ? `Sukunimi on “${label}”` : '')
@@ -102,20 +103,31 @@ function renderFavorites() {
   const context = document.querySelector('#favorites-context');
   setAdSlotsEnabled('favorites', activeNames.size > 0);
   list.innerHTML = '';
-  if (!activeNames.size) {
+  const hasFavorites = activeNames.size > 0;
+  const entries = hasFavorites
+    ? Array.from(activeNames).map(
+        (name) =>
+          nameMap.get(name) || {
+            name,
+            display: name,
+            popularity: { total: 0 },
+            groups: [],
+            phonetic: {},
+            metrics: {}
+          }
+      )
+    : [];
+  const surnameEntry = hasFavorites ? annotateMatches(entries) : getSurnameEntry();
+  const missingSurname = Boolean(surnameValue && !surnameEntry);
+  updateSurnameAnalysis(surnameEntry, missingSurname);
+  updateMatchContext(surnameEntry, missingSurname);
+  updateBackLinkHref();
+  if (!hasFavorites) {
     count.textContent = 'Ei suosikkeja';
     context.textContent = '';
     list.innerHTML = '<p class="hint">Lisää nimiä suosikeiksi hakusivulta.</p>';
     return;
   }
-  const entries = Array.from(activeNames).map(
-    (name) =>
-      nameMap.get(name) || { name, display: name, popularity: { total: 0 }, groups: [], phonetic: {}, metrics: {} }
-  );
-  const surnameEntry = annotateMatches(entries);
-  const missingSurname = Boolean(surnameValue && !surnameEntry);
-  updateSurnameAnalysis(surnameEntry, missingSurname);
-  updateMatchContext(surnameEntry, missingSurname);
   const sorted = sortEntries(entries);
   sorted.forEach((entry) => {
     const name = entry.name;
@@ -463,6 +475,7 @@ function decodeActiveNames() {
   } else {
     activeNames = new Set(favorites);
   }
+  updateBackLinkHref();
 }
 
 function shareFavorites() {
@@ -621,6 +634,7 @@ function bindActions() {
     const missing = Boolean(surnameValue && !entry);
     updateSurnameAnalysis(entry, missing);
     updateMatchContext(entry, missing);
+    updateBackLinkHref();
     renderFavorites();
   });
   document.querySelector('#favorites-open-weight')?.addEventListener('click', openWeightModal);
@@ -636,10 +650,15 @@ async function init() {
   updateBackLinkFromReferrer();
   decodeActiveNames();
   await loadData();
+  const initialSurnameEntry = getSurnameEntry();
+  const initialMissing = Boolean(surnameValue && !initialSurnameEntry);
+  updateSurnameAnalysis(initialSurnameEntry, initialMissing);
+  updateMatchContext(initialSurnameEntry, initialMissing);
   registerAdSlots('favorites', ['.ad-rail']);
   setAdSlotsEnabled('favorites', false);
   bindActions();
   updateSaveVisibility();
+  updateBackLinkHref();
   renderFavorites();
 }
 
@@ -660,9 +679,36 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+function buildBackLinkHref() {
+  const baseSearch =
+    backLinkSearch && backLinkSearch.length
+      ? backLinkSearch.replace(/^\?/, '')
+      : window.location.search.replace(/^\?/, '');
+  const params = new URLSearchParams(baseSearch);
+  const surname = (surnameValue || '').trim();
+  if (surname) {
+    params.set('surname', surname);
+  } else {
+    params.delete('surname');
+  }
+  const query = params.toString();
+  return query ? `index.html?${query}` : 'index.html';
+}
+
+function updateBackLinkHref() {
+  const link = document.querySelector('.favorite-nav');
+  if (!link) return;
+  link.href = buildBackLinkHref();
+}
+
 function updateBackLinkFromReferrer() {
   const link = document.querySelector('.favorite-nav');
-  if (!link || !document.referrer) return;
+  if (!link) return;
+  if (!document.referrer) {
+    backLinkSearch = '';
+    updateBackLinkHref();
+    return;
+  }
   try {
     const refUrl = new URL(document.referrer);
     const sameOrigin = refUrl.origin === window.location.origin;
@@ -671,7 +717,8 @@ function updateBackLinkFromReferrer() {
       refUrl.pathname === '/' ||
       refUrl.pathname === '';
     if (sameOrigin && isIndex) {
-      link.href = `index.html${refUrl.search}`;
+      backLinkSearch = refUrl.search || '';
+      updateBackLinkHref();
     }
   } catch {
     /* ignore malformed referrer */
