@@ -1,8 +1,8 @@
 import { loadContentBlocks } from './content-loader.js';
 
 const GA_MEASUREMENT_ID = 'G-88PNGZ7WGM';
-const FAVICON_DATA_URL =
-  'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐣</text></svg>';
+const FAVICON_URL = '/favicon.ico';
+const SITE_ORIGIN = 'https://nimivauvalle.fi';
 
 function ensureFavicon() {
   const head = document.head;
@@ -11,8 +11,8 @@ function ensureFavicon() {
     head.querySelector('link[rel="icon"]') || head.querySelector('link[rel="shortcut icon"]');
   const link = existing || document.createElement('link');
   link.rel = 'icon';
-  link.type = 'image/svg+xml';
-  link.href = FAVICON_DATA_URL;
+  link.type = 'image/x-icon';
+  link.href = FAVICON_URL;
   if (!existing) {
     head.appendChild(link);
   }
@@ -40,6 +40,122 @@ function injectAnalyticsTag() {
   window.gtag('config', GA_MEASUREMENT_ID);
 }
 
+function injectSeoMeta() {
+  const head = document.head;
+  if (!head) return;
+  const pageTitle = document.title || 'Nimi vauvalle';
+  const pageDesc =
+    document
+      .querySelector('meta[name="description"]')
+      ?.getAttribute('content') ||
+    'Älykäs nimikone ja nimilista: etsi vauvalle sopivin nimi.';
+  const path = window.location?.pathname || '/';
+  const canonicalUrl = `${SITE_ORIGIN}${path === '/' ? '/' : path}`;
+
+  const ensureTag = (selector, create) => {
+    let el = head.querySelector(selector);
+    if (!el) {
+      el = create();
+      head.appendChild(el);
+    }
+    return el;
+  };
+
+  const canonical = ensureTag('link[rel="canonical"]', () => {
+    const link = document.createElement('link');
+    link.rel = 'canonical';
+    return link;
+  });
+  canonical.href = canonicalUrl;
+
+  const ogTitle = ensureTag('meta[property="og:title"]', () => {
+    const m = document.createElement('meta');
+    m.setAttribute('property', 'og:title');
+    return m;
+  });
+  ogTitle.setAttribute('content', pageTitle);
+
+  const ogDesc = ensureTag('meta[property="og:description"]', () => {
+    const m = document.createElement('meta');
+    m.setAttribute('property', 'og:description');
+    return m;
+  });
+  ogDesc.setAttribute('content', pageDesc);
+
+  const ogType = ensureTag('meta[property="og:type"]', () => {
+    const m = document.createElement('meta');
+    m.setAttribute('property', 'og:type');
+    return m;
+  });
+  ogType.setAttribute('content', 'website');
+
+  const ogUrl = ensureTag('meta[property="og:url"]', () => {
+    const m = document.createElement('meta');
+    m.setAttribute('property', 'og:url');
+    return m;
+  });
+  ogUrl.setAttribute('content', canonicalUrl);
+
+  const ogImage = ensureTag('meta[property="og:image"]', () => {
+    const m = document.createElement('meta');
+    m.setAttribute('property', 'og:image');
+    return m;
+  });
+  ogImage.setAttribute('content', `${SITE_ORIGIN}/assets/og-image.png`);
+
+  const twCard = ensureTag('meta[name="twitter:card"]', () => {
+    const m = document.createElement('meta');
+    m.setAttribute('name', 'twitter:card');
+    return m;
+  });
+  twCard.setAttribute('content', 'summary_large_image');
+
+  const twTitle = ensureTag('meta[name="twitter:title"]', () => {
+    const m = document.createElement('meta');
+    m.setAttribute('name', 'twitter:title');
+    return m;
+  });
+  twTitle.setAttribute('content', pageTitle);
+
+  const twDesc = ensureTag('meta[name="twitter:description"]', () => {
+    const m = document.createElement('meta');
+    m.setAttribute('name', 'twitter:description');
+    return m;
+  });
+  twDesc.setAttribute('content', pageDesc);
+
+  const twImage = ensureTag('meta[name="twitter:image"]', () => {
+    const m = document.createElement('meta');
+    m.setAttribute('name', 'twitter:image');
+    return m;
+  });
+  twImage.setAttribute('content', `${SITE_ORIGIN}/assets/og-image.png`);
+}
+
+function injectSearchLdJson() {
+  const head = document.head;
+  if (!head || !window.location) return;
+  const scriptId = 'ldjson-website';
+  if (head.querySelector(`#${scriptId}`)) return;
+  const urlBase = `${SITE_ORIGIN}/`;
+  const ld = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    url: urlBase,
+    name: 'Nimi vauvalle',
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: `${SITE_ORIGIN}/?surname={search_term_string}`,
+      'query-input': 'required name=search_term_string'
+    }
+  };
+  const script = document.createElement('script');
+  script.type = 'application/ld+json';
+  script.id = scriptId;
+  script.textContent = JSON.stringify(ld);
+  head.appendChild(script);
+}
+
 injectAnalyticsTag();
 
 export async function initPageChrome(options = {}) {
@@ -51,6 +167,8 @@ export async function initPageChrome(options = {}) {
   } = options;
 
   ensureFavicon();
+  injectSeoMeta();
+  injectSearchLdJson();
   if (loadContent) {
     await loadContentBlocks();
   }
