@@ -1,8 +1,14 @@
 const DEFAULT_PATHS = {
-  firstNames: 'data/first-names.json',
-  lastNames: 'data/last-names.json',
-  schema: 'data/schema.json'
+  firstNames: '/data/first-names.json',
+  lastNames: '/data/last-names.json',
+  schema: '/data/schema.json'
 };
+
+function resolvePath(path) {
+  if (!path) return path;
+  if (/^https?:\/\//i.test(path) || path.startsWith('/')) return path;
+  return `/${path.replace(/^\/+/, '')}`;
+}
 
 function assertResponseOk(response, label) {
   if (!response || !response.ok) {
@@ -12,13 +18,13 @@ function assertResponseOk(response, label) {
 
 export async function loadDataset(options = {}) {
   const { includeSurnames = false, paths = DEFAULT_PATHS } = options;
-  const requests = [fetch(paths.firstNames)];
+  const requests = [fetch(resolvePath(paths.firstNames))];
   const labels = ['first names'];
   if (includeSurnames) {
-    requests.push(fetch(paths.lastNames));
+    requests.push(fetch(resolvePath(paths.lastNames)));
     labels.push('last names');
   }
-  requests.push(fetch(paths.schema));
+  requests.push(fetch(resolvePath(paths.schema)));
   labels.push('schema');
 
   const responses = await Promise.all(requests);
@@ -35,7 +41,8 @@ export async function loadDataset(options = {}) {
   return {
     names: namesPayload.names || [],
     surnames: includeSurnames ? surnamesPayload.names || [] : [],
-    schema: schemaPayload
+    schema: schemaPayload,
+    populationTotal: namesPayload.populationTotal || 0
   };
 }
 

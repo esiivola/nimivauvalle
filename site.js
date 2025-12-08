@@ -1,6 +1,22 @@
 import { loadContentBlocks } from './content-loader.js';
 
 const GA_MEASUREMENT_ID = 'G-88PNGZ7WGM';
+const FAVICON_DATA_URL =
+  'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐣</text></svg>';
+
+function ensureFavicon() {
+  const head = document.head;
+  if (!head) return;
+  const existing =
+    head.querySelector('link[rel="icon"]') || head.querySelector('link[rel="shortcut icon"]');
+  const link = existing || document.createElement('link');
+  link.rel = 'icon';
+  link.type = 'image/svg+xml';
+  link.href = FAVICON_DATA_URL;
+  if (!existing) {
+    head.appendChild(link);
+  }
+}
 
 function injectAnalyticsTag() {
   if (!GA_MEASUREMENT_ID) return;
@@ -34,6 +50,7 @@ export async function initPageChrome(options = {}) {
     scrollToHash = false
   } = options;
 
+  ensureFavicon();
   if (loadContent) {
     await loadContentBlocks();
   }
@@ -58,7 +75,7 @@ export function injectHeaderNav() {
   const header = document.querySelector('.page-header');
   if (!header) return;
   const navLabel = document.body.dataset.navLabel || 'Takaisin hakuun';
-  const navHref = document.body.dataset.navHref || 'index.html';
+  const navHref = document.body.dataset.navHref || '/';
   let navLink = header.querySelector('.favorite-nav');
   if (!navLink) {
     navLink = document.createElement('a');

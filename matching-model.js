@@ -1,4 +1,4 @@
-const AE_BASE = 'data/aesthetics/model.json';
+const AE_BASE = '/data/aesthetics/model.json';
 
 const FRONT_VOWELS = new Set('yüöøäæ');
 const NEUTRAL_VOWELS = new Set('èéêëeiíï');

@@ -13,14 +13,14 @@
     <title>Nimi vauvalle</title>
     <meta
       name="description"
-      content="Suomen kattavin nimen valintatyökalu: löydä vauvallesi sopiva etunimi."
+      content="Sivusto auttaa sinua löytämään kaikista sopivimman nimen uudelle perheenjäsenellesi."
     />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://nimivauvalle.fi/" />
     <meta property="og:title" content="Nimi vauvalle – älykäs nimihaku" />
     <meta
       property="og:description"
-      content="Hae vauvan etunimeä, säädä fonetiikkapainotuksia ja katso, miten nimi sopii sukunimeen ääntämyksen ja suosion perusteella."
+      content="Sivusto auttaa sinua löytämään kaikista sopivimman nimen uudelle perheenjäsenellesi."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://nimivauvalle.fi/" />
@@ -80,14 +80,14 @@
       }
     </script>
   </head>
-  <body data-nav-label="Avaa suosikit" data-nav-href="favorites.html">
+<body data-nav-label="Avaa suosikit" data-nav-href="favorites/">
     <!-- Google Tag Manager (noscript) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-NJMD9WQQ"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- End Google Tag Manager (noscript) -->
     <main class="layout">
       <header class="page-header">
-        <a class="ghost favorite-nav" href="favorites.html">Avaa suosikit</a>
+        <a class="ghost favorite-nav" href="favorites/">Avaa suosikit</a>
         <div class="branding wide">
           <!--<p class="eyebrow"></p>-->
           <h1 class="hero-title">Nimi vauvalle</h1>
@@ -113,7 +113,7 @@
                 <label><input type="checkbox" name="gender" value="unisex" checked /> Unisex</label>
               </fieldset>
               <label class="surname-field">
-                Kirjoita vauvan sukunimi
+                Vauvan sukunimi
                 <input type="text" id="surname-input" name="surname" placeholder="Esim. Korhonen" autocomplete="off" />
                 <span class="hint">
                   Sivusto käyttää tekoälyä sopivien etunimien suositteluun. Sukunimeä ei tallenneta.  
@@ -124,67 +124,68 @@
             </div>
           </div>
 
-          <details id="desired-filter-panel" open>
-            <summary>Nimen toivotut ominaisuudet</summary>
-            <p class="hint tri-legend">○ ei aktiivinen · + vain tällaiset nimet · – poista tällaiset nimet</p>
-            <div id="feature-filters"></div>
-          </details>
-
-          <details id="range-filter-panel">
-            <summary>Nimen kirjain- ja pituusrajoitukset</summary>
-            <div class="letter-grid">
-              <label>
-                Nimen tulee sisältää
-                <input type="text" id="letters-include" placeholder="Esim. ai, ee, loo" autocomplete="off" />
-                <span class="hint">
-                  Nimessä tulee olla vähintään syötetyt kirjaimet. Esim. "aa" hyväksyy nimet, joissa on kaksi a-kirjainta. Pilkkua voi käyttää kuten tai. Esim. "aa, i" hyväksyy nimet, joissa on kaksi a-kirjainta tai yksi i-kirjain.
-                  <button type="button" class="link-button hint-toggle" data-target="letters-include-extra" aria-expanded="false">Näytä lisäohjeita</button>
-                  <span class="hint-extra" id="letters-include-extra" hidden>
-                    Lisäksi käytössä on erikoismerkit. Esim. "^aa": nimen täytyy alkaa aa:lla, "na$": nimen täytyy loppua na:han, "a*o": nimessä täytyy olla a:n jälkeen jossain vaiheessa o (tähti korvaa väliin tulevat kirjaimet).
-                  </span>
-                </span>
-              </label>
-              <label>
-                Nimen ei tule sisältää
-                <input type="text" id="letters-exclude" placeholder="Esim. sh, st, zz" autocomplete="off" />
-                <span class="hint">
-                  Nimessä ei saa olla syötettyjä kirjaimia. Esim. "aa": nimessä ei saa olla kahta (tai useampaa) a:ta. Pilkkua voi käyttää kuten tai. Esim. "aa, i": nimessä ei saa olla vähintään kahta a:ta tai yhtä i:tä.
-                  <button type="button" class="link-button hint-toggle" data-target="letters-exclude-extra" aria-expanded="false">Näytä lisäohjeita</button>
-                  <span class="hint-extra" id="letters-exclude-extra" hidden>
-                    Lisäksi käytössä on erikoismerkit. Esim. "^a": nimi ei saa alkaa a:lla, "a$": nimi ei saa päättyä a:han, "a*o": nimessä ei saa olla a:n jälkeen o:ta (tähti korvaa väliin tulevat kirjaimet).
-                  </span>
-                </span>
-              </label>
-            </div>
-            <div class="range-grid">
-              <div class="range-field">
-                <div class="range-header">
-                  <span>Merkkien määrä</span>
-                  <span id="letters-range-label" class="range-value"></span>
+          <details id="extra-filter-panel">
+            <summary>Lisätoiveet</summary>
+            <div class="extra-panels">
+              <div class="extra-panel">
+                <h4> Ominaisuudet</h4>
+                <div id="feature-filters"></div>
+              </div>
+              <div class="extra-panel">
+                <h4>Kirjain- ja pituusrajoitukset</h4>
+                <div class="letter-grid">
+                  <label>
+                    Nimen tulee sisältää
+                    <input type="text" id="letters-include" placeholder="Esim. ai, ee, loo" autocomplete="off" />
+                    <span class="hint">
+                      Nimessä tulee olla vähintään syötetyt kirjaimet. Esim. "aa" hyväksyy nimet, joissa on kaksi a-kirjainta. Pilkkua voi käyttää kuten tai. Esim. "aa, i" hyväksyy nimet, joissa on kaksi a-kirjainta tai yksi i-kirjain.
+                      <button type="button" class="link-button hint-toggle" data-target="letters-include-extra" aria-expanded="false">Näytä lisäohjeita</button>
+                      <span class="hint-extra" id="letters-include-extra" hidden>
+                        Lisäksi käytössä on erikoismerkit. Esim. "^aa": nimen täytyy alkaa aa:lla, "na$": nimen täytyy loppua na:han, "a*o": nimessä täytyy olla a:n jälkeen jossain vaiheessa o (tähti korvaa väliin tulevat kirjaimet).
+                      </span>
+                    </span>
+                  </label>
+                  <label>
+                    Nimen ei tule sisältää
+                    <input type="text" id="letters-exclude" placeholder="Esim. sh, st, zz" autocomplete="off" />
+                    <span class="hint">
+                      Nimessä ei saa olla syötettyjä kirjaimia. Esim. "aa": nimessä ei saa olla kahta (tai useampaa) a:ta. Pilkkua voi käyttää kuten tai. Esim. "aa, i": nimessä ei saa olla vähintään kahta a:ta tai yhtä i:tä.
+                      <button type="button" class="link-button hint-toggle" data-target="letters-exclude-extra" aria-expanded="false">Näytä lisäohjeita</button>
+                      <span class="hint-extra" id="letters-exclude-extra" hidden>
+                        Lisäksi käytössä on erikoismerkit. Esim. "^a": nimi ei saa alkaa a:lla, "a$": nimi ei saa päättyä a:han, "a*o": nimessä ei saa olla a:n jälkeen o:ta (tähti korvaa väliin tulevat kirjaimet).
+                      </span>
+                    </span>
+                  </label>
                 </div>
-                <div class="dual-slider" id="letters-slider"></div>
+                <div class="range-grid">
+                  <div class="range-field">
+                    <div class="range-header">
+                      <span>Merkkien määrä</span>
+                      <span id="letters-range-label" class="range-value"></span>
+                    </div>
+                    <div class="dual-slider" id="letters-slider"></div>
+                  </div>
+                </div>
               </div>
-            </div>
-          </details>
-
-          <details id="popularity-filter-panel">
-            <summary>Nimen suosioon liittyvät rajoitukset</summary>
-            <p class="hint tri-legend">○ ei aktiivinen · + vain tällaiset nimet · – poista tällaiset nimet</p>
-            <div id="popularity-filters" class="popularity-grid"></div>
-            <div class="range-field">
-              <div class="range-header">
-                <span>Nimenhaltijoiden määrä</span>
-                <span id="population-range-label" class="range-value"></span>
-              </div>
-              <div class="number-range">
-                <label>
-                  Minimi
-                  <input type="text" id="population-min" inputmode="numeric" placeholder="0" />
-                </label>
-                <label>
-                  Maksimi
-                  <input type="text" id="population-max" inputmode="numeric" placeholder="45 000" />
-                </label>
+              <div class="extra-panel">
+                <h4>Suosioon liittyvät rajoitukset</h4>
+                <div class="range-field">
+                  <div class="range-header">
+                    <span>Nimenhaltijoiden määrä</span>
+                    <span id="population-range-label" class="range-value"></span>
+                  </div>
+                  <div class="number-range">
+                    <label>
+                      Minimi
+                      <input type="text" id="population-min" inputmode="numeric" placeholder="0" />
+                    </label>
+                    <label>
+                      Maksimi
+                      <input type="text" id="population-max" inputmode="numeric" placeholder="45 000" />
+                    </label>
+                  </div>
+                </div>
+                <div id="popularity-filters" class="popularity-grid"></div>
               </div>
             </div>
           </details>

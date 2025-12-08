@@ -198,6 +198,8 @@ export function renderAgeDistributionChart(container, population, targetTotal, l
   };
   const bucketOrder = [];
   const bucketMap = new Map();
+  let maleTotal = 0;
+  let femaleTotal = 0;
   rawData.forEach((row) => {
     const baseLabel = row.ageRange || row.period || '';
     const bucket = resolveBucket(baseLabel);
@@ -208,6 +210,8 @@ export function renderAgeDistributionChart(container, population, targetTotal, l
     const male = typeof row.maleCount === 'number' ? row.maleCount : 0;
     const female = typeof row.femaleCount === 'number' ? row.femaleCount : 0;
     const totalRow = typeof row.totalCount === 'number' ? row.totalCount : male + female;
+    maleTotal += male;
+    femaleTotal += female;
     bucketMap.get(bucket).total += totalRow;
   });
   const aggregatedRows = bucketOrder.map((bucket) => bucketMap.get(bucket));
@@ -222,13 +226,23 @@ export function renderAgeDistributionChart(container, population, targetTotal, l
     const amount = scaledTotals[idx] || 0;
     return `${row.label}: ${formatCount(amount)} ${unit}`;
   });
+  const maleColor = '#e0f0ff';
+  const femaleColor = '#ffe2eb';
+  const defaultColor = '#4a67ff';
+  let barColor = defaultColor;
+  if (maleTotal > femaleTotal) {
+    barColor = maleColor;
+  } else if (femaleTotal > maleTotal) {
+    barColor = femaleColor;
+  }
+
   const trace = {
     type: 'bar',
     x,
     y: scaledTotals,
     hovertext: hoverTexts,
     hoverinfo: 'text',
-    marker: { color: '#4a67ff' },
+    marker: { color: barColor },
     cliponaxis: false,
     width: 0.55
   };

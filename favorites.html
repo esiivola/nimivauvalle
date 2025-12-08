@@ -16,21 +16,34 @@
       rel="stylesheet"
     />
     <!-- Silktide Consent Manager -->
-    <link rel="stylesheet" id="silktide-consent-manager-css" href="cookie-banner/silktide-consent-manager.css" />
-    <script src="cookie-banner/silktide-consent-manager.js"></script>
-    <link rel="stylesheet" href="cookie-banner/consent-overrides.css" />
-    <script src="cookie-banner/consent-config.js"></script>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" id="silktide-consent-manager-css" href="/cookie-banner/silktide-consent-manager.css" />
+    <script src="/cookie-banner/silktide-consent-manager.js"></script>
+    <link rel="stylesheet" href="/cookie-banner/consent-overrides.css" />
+    <script src="/cookie-banner/consent-config.js"></script>
+    <link rel="stylesheet" href="/styles.css" />
     <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <script>
+      (function () {
+        var path = window.location.pathname || '';
+        if (/\/favorites\.html?$/i.test(path)) {
+          var cleaned = path.replace(/favorites\.html?$/i, 'favorites/');
+          var normalized = cleaned.endsWith('/') ? cleaned : cleaned + '/';
+          var newUrl = normalized + window.location.search + window.location.hash;
+          if (newUrl !== window.location.href) {
+            window.history.replaceState(null, '', newUrl);
+          }
+        }
+      })();
+    </script>
   </head>
-  <body data-nav-label="Takaisin hakuun" data-nav-href="index.html">
+<body data-nav-label="Takaisin hakuun" data-nav-href="/">
     <!-- Google Tag Manager (noscript) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-NJMD9WQQ"
     height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- End Google Tag Manager (noscript) -->
     <main class="layout">
       <header class="page-header">
-        <a class="ghost favorite-nav" href="index.html">Takaisin hakuun</a>
+        <a class="ghost favorite-nav" href="/">Takaisin hakuun</a>
         <div class="branding wide">
           <h1 class="hero-title">Nimi vauvalle</h1>
           <p class="hero-subtitle">Näet omat suosikkisi tai sinulle jaetun listan. Voit poistaa nimiä ja tallentaa muutokset.</p>
@@ -102,11 +115,11 @@
         </div>
       </div>
     </div>
-    <div data-include="footer.html"></div>
+    <div data-include="/footer.html"></div>
     <script type="module">
-      import { initPageChrome } from './site.js';
+      import { initPageChrome } from '/site.js';
       initPageChrome();
     </script>
-    <script type="module" src="favorites.js"></script>
+    <script type="module" src="/favorites.js"></script>
   </body>
 </html>

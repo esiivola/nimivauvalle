@@ -151,6 +151,7 @@ let matchingModel = null;
 let detailService = null;
 const LETTER_LIMITS = { min: 1, max: 20 };
 const POPULATION_LIMITS = { min: 0, max: 45000 };
+let populationBaseEstimate = 5600000;
 let lettersRangeControl = null;
 let favorites = new Set();
 let surnameInputTimer = null;
@@ -194,6 +195,21 @@ function getTypedSurname() {
   return (state.surname || '').trim();
 }
 
+function preserveScroll(element) {
+  if (!element || !element.isConnected) return () => {};
+  const rect = element.getBoundingClientRect();
+  if (element.hidden || (!rect.width && !rect.height)) return () => {};
+  const prevTop = rect.top;
+  return () => {
+    requestAnimationFrame(() => {
+      if (!element.isConnected || element.hidden) return;
+      const newRect = element.getBoundingClientRect();
+      if (!newRect.width && !newRect.height) return;
+      window.scrollBy({ top: newRect.top - prevTop });
+    });
+  };
+}
+
 function isRangeFilterActive() {
   const includeActive = parseLetterTokens(state.includeLettersInput).length > 0;
   const excludeActive = parseLetterTokens(state.excludeLettersInput).length > 0;
@@ -214,9 +230,9 @@ function setPanelOpen(panelId, shouldOpen) {
 
 function updateFilterPanels() {
   const hasTraitFilters = state.groupFilters.length > 0 || state.phoneticFilters.length > 0;
-  setPanelOpen('desired-filter-panel', hasTraitFilters);
-  setPanelOpen('range-filter-panel', isRangeFilterActive());
-  setPanelOpen('popularity-filter-panel', state.popularityFilters.length > 0);
+  const hasRangeFilters = isRangeFilterActive();
+  const hasPopularity = state.popularityFilters.length > 0;
+  setPanelOpen('extra-filter-panel', hasTraitFilters || hasRangeFilters || hasPopularity);
 }
 
 const sortDescriptions = {
@@ -234,6 +250,10 @@ async function loadData() {
     loadDataset({ includeSurnames: true }),
     loadMatchingModel()
   ]);
+  const totalPop = Number(dataset?.populationTotal || 0);
+  if (Number.isFinite(totalPop) && totalPop > 0) {
+    populationBaseEstimate = totalPop;
+  }
   matchingModel = model;
   if (!state.weightOverrides) {
     const shared = readSharedWeights();
@@ -570,7 +590,8 @@ function updateFavoriteNavHref() {
   const params = new URLSearchParams();
   const surname = (state.surname || '').trim();
   if (surname) params.set('surname', surname);
-  link.href = params.toString() ? `favorites.html?${params.toString()}` : 'favorites.html';
+  const baseHref = 'favorites/';
+  link.href = params.toString() ? `${baseHref}?${params.toString()}` : baseHref;
   setAdSlotsEnabled('results', getFilteredCount() > 0);
 }
 
@@ -667,10 +688,12 @@ function scheduleApplyFilters(skipFormSync = false, delay = 250) {
 function renderFeatureFilters() {
   const container = $('#feature-filters');
   if (!container) return;
+  const restore = preserveScroll(container);
   container.innerHTML = '';
   if (!filterFeatureMeta.length) {
     container.innerHTML = '<p class="hint">Ei rajattavia ominaisuuksia.</p>';
     updateFilterPanels();
+    restore();
     return;
   }
   const toggleStates = (current) => {
@@ -702,7 +725,7 @@ function renderFeatureFilters() {
     button.className = 'ghost small tri-toggle';
     const setState = (mode) => {
       button.dataset.state = mode;
-      button.textContent = mode === 'include' ? '+' : mode === 'exclude' ? '–' : '○';
+      button.textContent = mode === 'include' ? '+ Vain nämä' : mode === 'exclude' ? '– Poista nämä' : '○ Ei käytössä';
     };
     setState(currentMode);
     button.title =
@@ -743,6 +766,7 @@ function renderFeatureFilters() {
   });
   container.appendChild(grid);
   updateFilterPanels();
+  restore();
 }
 
 function getPopularityOptions(prefix) {
@@ -785,6 +809,7 @@ function renderGroupFilters() {
 function renderPopularityFilters() {
   const container = $('#popularity-filters');
   if (!container) return;
+  const restore = preserveScroll(container);
   container.innerHTML = '';
   const rows = [
     {
@@ -840,7 +865,7 @@ function renderPopularityFilters() {
     }
     const setState = (mode) => {
       tri.dataset.state = mode;
-      tri.textContent = mode === 'include' ? '+' : mode === 'exclude' ? '–' : '○';
+      tri.textContent = mode === 'include' ? '+ Vain nämä' : mode === 'exclude' ? '– Poista nämä' : '○ Ei käytössä';
     };
     setState(current ? current.mode : 'none');
     tri.addEventListener('click', () => {
@@ -865,6 +890,7 @@ function renderPopularityFilters() {
     container.appendChild(descWrap);
   });
   updateFilterPanels();
+  restore();
 }
 
 function addPopularityFilter() {
@@ -920,6 +946,7 @@ function applyFilters(skipFormSync = false) {
   if (!skipFormSync) {
     updateStateFromForm();
   }
+  const restoreResultsScroll = preserveScroll(document.getElementById('results'));
   state.visibleCount = PAGE_SIZE;
   const surnameKey = state.surname.toLowerCase();
   const surnameEntry = surnameKey ? surnameMap.get(surnameKey) : null;
@@ -931,8 +958,10 @@ function applyFilters(skipFormSync = false) {
   data.names.forEach((entry) => {
     const reasons = collectFilterFailures(entry);
     entry._match = surnameEntry ? computeMatchScore(entry, surnameEntry) : null;
-    if (surnameCount && entry.populationShare) {
-      const comboValue = surnameCount * entry.populationShare;
+    const totalOwners = Number(entry.popularity?.total || 0);
+    if (surnameCount && totalOwners) {
+      const base = populationBaseEstimate || POPULATION_LIMITS.max || 1;
+      const comboValue = surnameCount * (totalOwners / base);
       entry._comboEstimate = comboValue >= 0.5 ? comboValue : null;
     } else {
       entry._comboEstimate = null;
@@ -952,7 +981,7 @@ function applyFilters(skipFormSync = false) {
   currentResults = filtered;
   state.matchInfo = { surnameEntry, missingSurname };
   updateSurnameAnalysis(surnameEntry, missingSurname);
-  renderResults();
+  renderResults(restoreResultsScroll);
   updateUrl();
 }
 
@@ -1880,10 +1909,12 @@ function syncWeightEditorTexts() {
 function renderActiveFilters() {
   const container = $('#active-filters');
   if (!container) return;
+  const restore = preserveScroll(container);
   container.innerHTML = '';
   const chips = getActiveFilterChips();
   if (!chips.length) {
     container.hidden = true;
+    restore();
     return;
   }
   container.hidden = false;
@@ -1903,6 +1934,7 @@ function renderActiveFilters() {
     tag.appendChild(btn);
     container.appendChild(tag);
   });
+  restore();
 }
 
 function createNameCard(entry, t, surnameEntry, { filtered = false } = {}) {
@@ -1983,19 +2015,22 @@ function createExpandedFilteredGroup(filteredEntries, t, surnameEntry, blockId) 
   return { expanded, listContainer };
 }
 
-function renderResults() {
+function renderResults(restoreResultsScroll) {
   const t = translations.fi;
   const list = $('#results-list');
   const { surnameEntry, missingSurname } = state.matchInfo;
-  const totalAvailable = getFilteredCount();
-  setAdSlotsEnabled('results', totalAvailable > 0);
+  const displayableTotal = getDisplayableCount();
+  const totalUnfiltered = currentResults.length;
+  setAdSlotsEnabled('results', displayableTotal > 0);
   list.innerHTML = '';
   let renderedCount = 0;
+  let renderedUnfiltered = 0;
+  let expandedAvailableCount = 0;
   let usedSlots = 0;
   let filteredBlockCounter = 0;
   const activeBlockIds = new Set();
   let hitVisibleLimit = false;
-  if (!totalAvailable) {
+  if (!displayableTotal && !totalUnfiltered) {
     list.innerHTML = `<p class="hint">${t.noResults}</p>`;
   } else {
     let filteredBuffer = [];
@@ -2007,6 +2042,7 @@ function renderResults() {
       activeBlockIds.add(blockId);
       const isExpanded = expandedFilteredBlocks.has(blockId);
       if (isExpanded) {
+        expandedAvailableCount += filteredBuffer.length;
         const { expanded, listContainer } = createExpandedFilteredGroup(
           filteredBuffer,
           t,
@@ -2056,6 +2092,7 @@ function renderResults() {
       list.appendChild(card);
       usedSlots += 1;
       renderedCount += 1;
+      renderedUnfiltered += 1;
     }
     if (!hitVisibleLimit) {
       flushFilteredBuffer();
@@ -2066,9 +2103,9 @@ function renderResults() {
       expandedFilteredBlocks.delete(id);
     }
   });
-  const shownCount = Math.min(usedSlots, totalAvailable);
-  $('#result-count').textContent = totalAvailable
-    ? t.results(1, shownCount, totalAvailable)
+  const shownCount = Math.min(renderedUnfiltered, totalUnfiltered);
+  $('#result-count').textContent = totalUnfiltered
+    ? t.results(1, shownCount, totalUnfiltered)
     : t.noResults;
   const typedSurname = getTypedSurname();
   const surnameLabel = typedSurname || state.surname || '';
@@ -2078,11 +2115,13 @@ function renderResults() {
   renderActiveFilters();
   const loadMoreBtn = $('#load-more');
   if (loadMoreBtn) {
-    const hasMore = shownCount < totalAvailable;
+    const totalRenderable = totalUnfiltered + expandedAvailableCount;
+    const hasMore = usedSlots < totalRenderable;
     loadMoreBtn.disabled = !hasMore;
-    loadMoreBtn.hidden = totalAvailable === 0;
+    loadMoreBtn.hidden = totalRenderable === 0;
     loadMoreBtn.textContent = hasMore ? 'Näytä lisää nimiä' : 'Ei enempää nimiä';
   }
+  restoreResultsScroll?.();
 }
 
 function loadCardDetails(card, bodyContainer, entry, t, surnameEntry) {
@@ -2817,7 +2856,7 @@ function bindEvents() {
   const loadMoreBtn = $('#load-more');
   if (loadMoreBtn) {
     loadMoreBtn.addEventListener('click', () => {
-      const totalAvailable = getFilteredCount();
+      const totalAvailable = getDisplayableCount();
       state.visibleCount = Math.min(state.visibleCount + PAGE_SIZE, totalAvailable);
       renderResults();
     });

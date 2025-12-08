@@ -69,7 +69,14 @@ const FAVORITES_T = {
 const surnameUsageBuilder = (count, rank) => `Sukunimeä käyttää ${count} henkilöä ja se on ${rank}:s yleisin.`;
 
 async function loadData() {
-  const { names, surnames, schema: loadedSchema } = await loadDataset({ includeSurnames: true });
+  const { names, surnames, schema: loadedSchema } = await loadDataset({
+    includeSurnames: true,
+    paths: {
+      firstNames: '/data/first-names.json',
+      lastNames: '/data/last-names.json',
+      schema: '/data/schema.json'
+    }
+  });
   schema = loadedSchema;
   nameMap = new Map(names.map((entry) => [entry.name, entry]));
   const surnameData = buildSurnameData(surnames);
@@ -692,7 +699,7 @@ function buildBackLinkHref() {
     params.delete('surname');
   }
   const query = params.toString();
-  return query ? `index.html?${query}` : 'index.html';
+  return query ? `/?${query}` : '/';
 }
 
 function updateBackLinkHref() {
