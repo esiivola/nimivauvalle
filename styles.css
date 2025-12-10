@@ -123,6 +123,11 @@ section[data-include="content/articles-strip.html"] {
   max-width: 72ch;
 }
 
+.page-motivation {
+  color: var(--muted);
+  font-size: 1rem;
+}
+
 .ad-slot {
   border: 1px dashed var(--border);
   border-radius: 1rem;
@@ -1216,7 +1221,7 @@ button:not(:disabled):hover {
   border: 1px solid var(--border);
   border-radius: 0.85rem;
   background: #fff;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: 0 14px 40px rgba(29, 34, 50, 0.08);
 }
 
@@ -1238,6 +1243,21 @@ button:not(:disabled):hover {
   padding: 0.85rem 1rem;
   cursor: pointer;
   font-weight: 600;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.name-card summary:focus {
+  outline: none;
+}
+
+.name-card summary:focus-visible {
+  outline: 2px solid var(--accent-muted);
+  outline-offset: 3px;
+}
+
+.name-card summary:active {
+  background: transparent;
+  color: inherit;
 }
 
 .favorite-btn {
@@ -1255,6 +1275,10 @@ button:not(:disabled):hover {
 }
 
 .favorite-btn:focus {
+  outline: none;
+}
+
+.favorite-btn:focus-visible {
   outline: 2px solid var(--accent-muted);
   outline-offset: 2px;
 }
@@ -1370,6 +1394,62 @@ button:not(:disabled):hover {
   background: var(--chip-bg);
   color: var(--muted);
   font-weight: 600;
+  border: 1px solid transparent;
+  position: relative;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+}
+
+.tag-hintable {
+  cursor: pointer;
+}
+
+.tag-hintable:hover:not(.tag-hint-open) {
+  border-color: var(--text);
+  box-shadow: 0 0 0 1px var(--border);
+  color: var(--text);
+}
+
+.tag-hint-open {
+  border-color: var(--text);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.tag-hint-bubble {
+  position: absolute;
+  z-index: 30;
+  top: 110%;
+  left: 0;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 24px rgba(26, 37, 60, 0.12);
+  padding: 0.45rem 0.6rem 0.4rem 0.6rem;
+  min-width: 200px;
+  max-width: 240px;
+  font-size: 0.9rem;
+  color: var(--text);
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.tag-hint-text {
+  line-height: 1.4;
+  flex: 1;
+}
+
+.tag-hint-close {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.1rem;
+  cursor: pointer;
+}
+
+.tag-hint-close:hover {
+  color: var(--text);
 }
 
 .tag.reason {
@@ -1637,6 +1717,31 @@ button:not(:disabled):hover {
 .wiki-summary strong {
   display: inline-block;
   margin-bottom: 0.2rem;
+}
+
+.wiki-summary .wiki-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-left: 0.35rem;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 0.08em;
+  line-height: 1.2;
+}
+
+.wiki-summary .wiki-toggle:hover {
+  color: var(--text);
+  text-decoration-color: currentColor;
+  transform: none;
+}
+
+.wiki-summary .wiki-toggle:focus-visible {
+  outline: 2px solid var(--accent-muted);
+  outline-offset: 2px;
 }
 
 .charts-section {

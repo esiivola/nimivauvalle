@@ -2,20 +2,27 @@ import { loadContentBlocks } from './content-loader.js';
 
 const GA_MEASUREMENT_ID = 'G-88PNGZ7WGM';
 const FAVICON_URL = '/favicon.ico';
+const SAFARI_MASK_ICON = '/safari-pinned-tab.svg';
+const SAFARI_MASK_COLOR = '#ff7d6e';
 const SITE_ORIGIN = 'https://nimivauvalle.fi';
 
 function ensureFavicon() {
   const head = document.head;
   if (!head) return;
-  const existing =
+  const iconLink =
     head.querySelector('link[rel="icon"]') || head.querySelector('link[rel="shortcut icon"]');
-  const link = existing || document.createElement('link');
-  link.rel = 'icon';
-  link.type = 'image/x-icon';
-  link.href = FAVICON_URL;
-  if (!existing) {
-    head.appendChild(link);
-  }
+  const favicon = iconLink || document.createElement('link');
+  favicon.rel = 'icon';
+  favicon.type = 'image/x-icon';
+  favicon.href = FAVICON_URL;
+  favicon.setAttribute('sizes', 'any');
+  if (!iconLink) head.appendChild(favicon);
+
+  const maskLink = head.querySelector('link[rel="mask-icon"]') || document.createElement('link');
+  maskLink.rel = 'mask-icon';
+  maskLink.href = SAFARI_MASK_ICON;
+  maskLink.setAttribute('color', SAFARI_MASK_COLOR);
+  if (!maskLink.parentNode) head.appendChild(maskLink);
 }
 
 function injectAnalyticsTag() {
@@ -157,6 +164,7 @@ function injectSearchLdJson() {
 }
 
 injectAnalyticsTag();
+ensureFavicon();
 
 export async function initPageChrome(options = {}) {
   const {

@@ -45,7 +45,7 @@ const translations = {
     missingSurname: (surname) => `Sukunimeä “${surname}” ei löytynyt aineistosta - vertailu ohitettiin.`,
     matchLabel: 'Sukunimiosuvuus',
     grade: (label) => `Taso: ${label}`,
-    historyTitle: 'Nimen käyttö historiassa',
+    historyTitle: 'Nimen suosio historiassa',
     historyLinkText: 'linkki',
     historyLegendMale: 'Miehiä',
     historyLegendFemale: 'Naisia',
@@ -2671,7 +2671,7 @@ function buildFirstNameAnalysis(entry, surnameEntry) {
 }
 
 function createHistoryLabel(entry, t) {
-  const base = t.historyTitle || 'Nimen käyttö historiassa';
+  const base = t.historyTitle || 'Nimen suosio historiassa';
   const name = entry?.display || entry?.name || '';
   if (!name) return base;
   const linkText = t.historyLinkText || 'linkki';

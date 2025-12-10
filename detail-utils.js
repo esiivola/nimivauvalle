@@ -3,6 +3,9 @@ const LANGUAGES = [
   { key: 'sv', label: 'sv' },
   { key: 'en', label: 'en' }
 ];
+const WIKI_API_BASE = 'https://fi.wikipedia.org/w/api.php?origin=*';
+const WIKI_INFOBOX_LABELS = ['Muunnelmia', 'Vastineita eri kielissä', 'Nimen alkuperä'];
+const EMPTY_FIELD_PATTERN = /^[-–—]+$/;
 
 export function escapeHtml(value = '') {
   return String(value)
@@ -269,52 +272,316 @@ export function renderAgeDistributionChart(container, population, targetTotal, l
   });
 }
 
-export function fetchWikiSummary(entry, container, options = {}) {
+// --- Small HTML sanitizer for Wikipedia snippets ---
+function sanitizeWikiHtml(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+
+  // Remove unsafe tags
+  tmp.querySelectorAll('script, style').forEach(el => el.remove());
+
+  tmp.querySelectorAll('*').forEach(el => {
+    // Strip inline event handlers
+    [...el.attributes].forEach(attr => {
+      if (attr.name.toLowerCase().startsWith('on')) {
+        el.removeAttribute(attr.name);
+      }
+    });
+
+    // Fix anchors
+    if (el.tagName === 'A') {
+      const href = el.getAttribute('href') || '';
+      if (href.startsWith('/wiki/')) {
+        el.setAttribute('href', 'https://fi.wikipedia.org' + href);
+        el.setAttribute('target', '_blank');
+        el.setAttribute('rel', 'noopener');
+      } else if (!href.startsWith('http')) {
+        // Drop weird protocols
+        el.removeAttribute('href');
+      } else {
+        el.setAttribute('target', '_blank');
+        el.setAttribute('rel', 'noopener');
+      }
+    }
+  });
+
+  return tmp.innerHTML.trim();
+}
+
+function hasMeaningfulHtml(html) {
+  if (!html) return false;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  const text = (tmp.textContent || '').replace(/\s+/g, ' ').trim();
+  const compact = text.replace(/\s+/g, '');
+  if (!text || EMPTY_FIELD_PATTERN.test(compact)) {
+    return false;
+  }
+  return true;
+}
+
+// --- Infobox: Muunnelmia / Vastineita eri kielissä / Nimen alkuperä (with links) ---
+async function fetchInfoboxFields(pageTitle) {
+  const url =
+    `${WIKI_API_BASE}` +
+    `&action=parse&page=${encodeURIComponent(pageTitle)}` +
+    '&prop=text&format=json&redirects=1';
+
+  const res = await fetch(url);
+  if (!res.ok) return {};
+  const data = await res.json();
+  const html = data.parse?.text?.['*'];
+  if (!html) return {};
+
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+
+  const infobox =
+    tmp.querySelector('table.infobox') ||
+    tmp.querySelector('table.infobox.suomi') ||
+    tmp.querySelector('table.infobox.etunimi') ||
+    tmp.querySelector('table[class*="infobox"]');
+
+  if (!infobox) return {};
+
+  const result = {};
+
+  infobox.querySelectorAll('tr').forEach(tr => {
+    const cells = tr.querySelectorAll('th, td');
+    if (cells.length < 2) return;
+
+    const labelNode = cells[0];
+    const valueNode = cells[1];
+
+    let label = labelNode.textContent || '';
+    label = label.replace(/\u00A0/g, ' ');   // nbsp -> space
+    label = label.replace(/\s+/g, ' ').trim();
+
+    const matched = WIKI_INFOBOX_LABELS.find((w) => w === label);
+    if (!matched) return;
+
+    const sanitized = sanitizeWikiHtml(valueNode.innerHTML);
+    if (!hasMeaningfulHtml(sanitized)) return;
+
+    result[matched] = sanitized;
+  });
+
+  return result;
+}
+
+// --- Known people: "Tunnettuja Antteja / Mikkoja..." on one line with toggle ---
+async function fetchKnownPeople(pageTitle) {
+  const base = WIKI_API_BASE;
+
+  const sectionsUrl =
+    `${base}&action=parse&page=${encodeURIComponent(pageTitle)}` +
+    '&prop=sections&format=json&redirects=1';
+
+  const secRes = await fetch(sectionsUrl);
+  if (!secRes.ok) return null;
+  const secData = await secRes.json();
+  const sections = secData.parse?.sections || [];
+
+  // Generic: "Tunnettuja Antteja", "Tunnettuja Mikkoja", ...
+  let section = sections.find(s => s.line && s.line.startsWith('Tunnettuja '));
+  if (!section) return null;
+
+  const sectionUrl =
+    `${base}&action=parse&page=${encodeURIComponent(pageTitle)}` +
+    `&prop=text&section=${section.index}&format=json&redirects=1`;
+
+  const sectionRes = await fetch(sectionUrl);
+  if (!sectionRes.ok) return null;
+  const sectionData = await sectionRes.json();
+  const html = sectionData.parse?.text?.['*'];
+  if (!html) return null;
+
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+
+  const peopleHtml = [];
+
+  tmp.querySelectorAll('li').forEach(li => {
+    const a = li.querySelector('a[href^="/wiki/"]');
+    if (!a) return;
+
+    const name = a.textContent.trim();
+    const href = a.getAttribute('href') || '';
+
+    // Full list item text
+    let fullText = li.textContent.trim();
+
+    // Remove the name at the beginning to get description
+    if (fullText.toLowerCase().startsWith(name.toLowerCase())) {
+      fullText = fullText.slice(name.length).trim();
+    }
+
+    // Trim leading punctuation
+    fullText = fullText.replace(/^[-,:–—\s]+/, '').trim();
+
+    const linkHtml = `<a href="https://fi.wikipedia.org${href}" target="_blank" rel="noopener">${escapeHtml(name)}</a>`;
+    const itemHtml = fullText
+      ? `${linkHtml} (${escapeHtml(fullText)})`
+      : linkHtml;
+
+    peopleHtml.push(itemHtml);
+  });
+
+  if (!peopleHtml.length) return null;
+
+  return {
+    title: section.line,     // e.g. "Tunnettuja Antteja"
+    peopleHtml
+  };
+}
+
+function buildWikiCandidates(entry) {
+  const display = entry?.display ? entry.display.trim() : '';
+  return [`${display}_(etunimi)`, `${display}_(nimi)`, display].filter(Boolean);
+}
+
+function setWikiStatus(container, status, text) {
+  container.dataset.status = status;
+  if (typeof text === 'string') {
+    container.textContent = text;
+  }
+}
+
+async function fetchWikiExtract(pageTitle) {
+  const url =
+    `${WIKI_API_BASE}` +
+    `&action=query&prop=extracts&exintro&explaintext&titles=${encodeURIComponent(pageTitle)}` +
+    '&format=json';
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Wikipedia extract failed');
+  const data = await response.json();
+  const extract = extractWikiText(data);
+  if (!extract) return null;
+  return { pageTitle, extract };
+}
+
+async function appendInfoboxFields(container, pageTitle) {
+  const fields = await fetchInfoboxFields(pageTitle);
+  Object.entries(fields || {}).forEach(([label, html]) => {
+    if (!hasMeaningfulHtml(html)) return;
+    container.insertAdjacentHTML('beforeend', `<br><em>${escapeHtml(label)}:</em> ${html}`);
+  });
+}
+
+async function appendKnownPeople(container, pageTitle, options) {
+  const { maxVisible, fullToggleLabel, lessToggleLabel, toggleClass } = options;
+  const known = await fetchKnownPeople(pageTitle);
+  if (!known || !known.peopleHtml?.length) return;
+
+  const visibleCount =
+    Number.isFinite(maxVisible) && maxVisible > 0 ? maxVisible : known.peopleHtml.length;
+  const isLong = known.peopleHtml.length > visibleCount;
+  const visible = isLong ? known.peopleHtml.slice(0, visibleCount) : known.peopleHtml;
+
+  container.insertAdjacentHTML('beforeend', '<br>');
+
+  const labelSpan = document.createElement('span');
+  labelSpan.innerHTML = `<em>${escapeHtml(known.title)}:</em> `;
+  container.appendChild(labelSpan);
+
+  const shortSpan = document.createElement('span');
+  const fullSpan = document.createElement('span');
+  fullSpan.style.display = 'none';
+
+  shortSpan.innerHTML = visible.join(', ') + (isLong ? ', …' : '');
+  fullSpan.innerHTML = known.peopleHtml.join(', ');
+
+  container.appendChild(shortSpan);
+  container.appendChild(fullSpan);
+
+  if (!isLong) return;
+
+  container.appendChild(document.createTextNode(' '));
+
+  const toggleBtn = document.createElement('button');
+  toggleBtn.type = 'button';
+  toggleBtn.textContent = fullToggleLabel;
+  const classNames = ['wiki-toggle', toggleClass].filter(Boolean).join(' ');
+  if (classNames) {
+    toggleBtn.className = classNames;
+  }
+
+  toggleBtn.addEventListener('click', () => {
+    const isShowingFull = fullSpan.style.display !== 'none';
+    if (isShowingFull) {
+      fullSpan.style.display = 'none';
+      shortSpan.style.display = '';
+      toggleBtn.textContent = fullToggleLabel;
+    } else {
+      fullSpan.style.display = '';
+      shortSpan.style.display = 'none';
+      toggleBtn.textContent = lessToggleLabel;
+    }
+  });
+
+  container.appendChild(toggleBtn);
+}
+
+export async function fetchWikiSummary(entry, container, options = {}) {
   const {
     loadingText = 'Haetaan Wikipedia-tiivistelmää…',
     unavailableText = 'Wikipedia-artikkelia ei löytynyt',
     title = 'Tietoa Wikipediasta',
     includeLink = false,
-    linkLabel = 'Wikipedia'
+    linkLabel = 'Wikipedia',
+    fullToggleLabel = 'Näytä koko yhteenveto',
+    lessToggleLabel = 'Näytä vähemmän',
+    maxKnownPeopleVisible = 8,
+    summaryToggleClass = ''
   } = options;
+
   if (!container || container.dataset.status === 'loading' || container.dataset.status === 'done') {
     return;
   }
-  container.dataset.status = 'loading';
-  container.textContent = loadingText;
-  const candidates = [`${entry.display}_(etunimi)`, `${entry.display}_(nimi)`, entry.display];
 
-  const attempt = (idx) => {
-    if (idx >= candidates.length) {
-      container.textContent = unavailableText;
-      container.dataset.status = 'done';
-      return;
+  setWikiStatus(container, 'loading', loadingText);
+
+  const candidates = buildWikiCandidates(entry);
+  let summary = null;
+
+  for (const candidate of candidates) {
+    try {
+      const result = await fetchWikiExtract(candidate);
+      if (result) {
+        summary = result;
+        break;
+      }
+    } catch (err) {
+      // Try next candidate
     }
-    const titleValue = encodeURIComponent(candidates[idx]);
-    const url = `https://fi.wikipedia.org/w/api.php?action=query&prop=extracts&exintro&explaintext&titles=${titleValue}&format=json&origin=*`;
-    fetch(url)
-      .then((response) => {
-        if (!response.ok) throw new Error('Not found');
-        return response.json();
-      })
-      .then((data) => {
-        const extract = extractWikiText(data);
-        if (!extract) {
-          attempt(idx + 1);
-          return;
-        }
-        const wikiUrl = `https://fi.wikipedia.org/wiki/${candidates[idx]}`;
-        const prefix = includeLink
-          ? `${title} (<a href="${wikiUrl}" target="_blank" rel="noopener">${linkLabel}</a>)`
-          : title;
-        container.innerHTML = `<strong>${prefix}:</strong> ${escapeHtml(extract)}`;
-        container.dataset.status = 'done';
-      })
-      .catch(() => attempt(idx + 1));
-  };
+  }
 
-  attempt(0);
+  if (!summary) {
+    setWikiStatus(container, 'done', unavailableText);
+    return;
+  }
+
+  const wikiUrl = `https://fi.wikipedia.org/wiki/${summary.pageTitle}`;
+  const prefix = includeLink
+    ? `${title} (<a href="${wikiUrl}" target="_blank" rel="noopener">${linkLabel}</a>)`
+    : title;
+
+  container.innerHTML = `<strong>${prefix}:</strong> ${escapeHtml(summary.extract)}`;
+  container.dataset.status = 'done';
+
+  const tasks = [
+    appendInfoboxFields(container, summary.pageTitle),
+    appendKnownPeople(container, summary.pageTitle, {
+      maxVisible: maxKnownPeopleVisible,
+      fullToggleLabel,
+      lessToggleLabel,
+      toggleClass: summaryToggleClass
+    })
+  ];
+
+  tasks.forEach((task) => task?.catch?.(() => {}));
 }
+
 
 export function createAdTracker(frequency = 0) {
   let counter = 0;

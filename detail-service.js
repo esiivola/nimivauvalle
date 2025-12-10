@@ -1,5 +1,11 @@
 const DEFAULT_DETAIL_BASE = 'data/details';
 
+const normalizePath = (path) => {
+  if (!path) return path;
+  if (/^https?:\/\//i.test(path) || path.startsWith('//')) return path;
+  return path.startsWith('/') ? path : `/${path}`;
+};
+
 export function createDetailService(schema = {}) {
   const detailBasePath = schema.details?.basePath || DEFAULT_DETAIL_BASE;
   const detailBucketMap = schema.details?.buckets || {};
@@ -8,9 +14,9 @@ export function createDetailService(schema = {}) {
   const getDetailPath = (bucket) => {
     if (!bucket) return null;
     if (detailBucketMap[bucket]) {
-      return detailBucketMap[bucket];
+      return normalizePath(detailBucketMap[bucket]);
     }
-    const normalizedBase = detailBasePath.replace(/\/+$/, '');
+    const normalizedBase = normalizePath(detailBasePath).replace(/\/+$/, '');
     return `${normalizedBase}/${bucket}.json`;
   };
 
@@ -20,8 +26,12 @@ export function createDetailService(schema = {}) {
       return cache.get(bucket);
     }
     const path = getDetailPath(bucket);
+    const url =
+      typeof path === 'string' && !/^https?:\/\//i.test(path) && !path.startsWith('//')
+        ? `${window.location.origin}${path.startsWith('/') ? '' : '/'}${path}`
+        : path;
     const promise = (async () => {
-      const response = await fetch(path);
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Failed to load detail chunk');
       }

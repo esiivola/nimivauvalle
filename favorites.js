@@ -408,7 +408,7 @@ async function loadCardDetails(card, body, entry) {
   const historyChart = document.createElement('div');
   historyChart.className = 'plotly-chart';
   historyContent.appendChild(historyChart);
-  const historyRow = createDetailRow('Nimen käyttö historiassa', historyContent);
+  const historyRow = createDetailRow('Nimen suosio historiassa', historyContent);
   if (historyRow) {
     historyRow.classList.add('chart-row');
     details.appendChild(historyRow);
@@ -448,7 +448,7 @@ async function loadCardDetails(card, body, entry) {
     noData: 'Ei historiallista käyttödataa',
     legendMale: 'Miehiä',
     legendFemale: 'Naisia',
-    yAxis: 'Nimen käyttö historiassa'
+    yAxis: 'Nimen suosio historiassa'
   });
   renderAgeDistributionChart(ageChart, entry.population, entry.popularity?.total, {
     noData: 'Ei ikäjakaumatietoa',
