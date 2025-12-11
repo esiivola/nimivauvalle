@@ -445,18 +445,29 @@ section[data-include="content/articles-strip.html"] {
   padding: 0;
 }
 
-.collapsible summary::-webkit-details-marker {
+.collapsible summary::-webkit-details-marker,
+.collapsible summary::marker {
   display: none;
+  content: '';
 }
 
 .collapsible .collapse-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: #eef0f8;
+  color: var(--text);
   font-weight: 700;
-  font-size: 1.2rem;
-  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .collapsible[open] .collapse-indicator {
-  transform: rotate(45deg);
+  transform: rotate(180deg);
 }
 
 .collapsible .collapsible-body {
