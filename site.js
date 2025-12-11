@@ -4,6 +4,7 @@ const GA_MEASUREMENT_ID = 'G-88PNGZ7WGM';
 const FAVICON_URL = '/favicon.ico';
 const SAFARI_MASK_ICON = '/safari-pinned-tab.svg';
 const SAFARI_MASK_COLOR = '#ff7d6e';
+const APPLE_TOUCH_ICON = '/apple-touch-icon.png';
 const SITE_ORIGIN = 'https://nimivauvalle.fi';
 
 function ensureFavicon() {
@@ -23,6 +24,12 @@ function ensureFavicon() {
   maskLink.href = SAFARI_MASK_ICON;
   maskLink.setAttribute('color', SAFARI_MASK_COLOR);
   if (!maskLink.parentNode) head.appendChild(maskLink);
+
+  const appleLink = head.querySelector('link[rel="apple-touch-icon"]') || document.createElement('link');
+  appleLink.rel = 'apple-touch-icon';
+  appleLink.href = APPLE_TOUCH_ICON;
+  appleLink.setAttribute('sizes', '180x180');
+  if (!appleLink.parentNode) head.appendChild(appleLink);
 }
 
 function injectAnalyticsTag() {
