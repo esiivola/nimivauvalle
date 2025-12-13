@@ -1,15 +1,8 @@
 import { createCardShell } from './shared-cards.js';
 import { loadDataset } from './data-service.js';
 import { createDetailService } from './detail-service.js';
-import { loadMatchingModel, computePairScore as computeModelPairScore } from './matching-model.js';
-import {
-  createAdTracker,
-  renderGroupChips,
-  renderPhoneticSummary,
-  renderUsageChart,
-  renderAgeDistributionChart,
-  fetchWikiSummary
-} from './detail-utils.js';
+import { loadMatchingModel } from './matching-model.js';
+import { createAdTracker } from './detail-utils.js';
 import {
   FAVORITES_KEY,
   decodeFavoritesParam,
@@ -34,6 +27,7 @@ import {
   readSharedWeights,
   weightToPercent
 } from './weight-utils.js';
+import { createCardDetailLoader } from './name-detail-renderer.js';
 
 let favorites = new Set();
 let activeNames = new Set();
@@ -47,6 +41,7 @@ let phoneticMeta = new Map();
 const DETAIL_AD_FREQUENCY = 3;
 let detailService = null;
 const detailAds = createAdTracker(DETAIL_AD_FREQUENCY);
+let detailLoader = null;
 let sortKey = 'match';
 let sortDir = 'desc';
 let periodRanks = new Map();
@@ -65,6 +60,22 @@ const FAVORITES_T = {
   comboTag: (count) => `Täyskaimoja: ~${count}`,
   surnameMissing: (label) => `Sukunimeä “${label}” ei löytynyt aineistosta - vertailu ohitetaan.`,
   surnameMatch: (label) => (label ? `Sukunimi on “${label}”` : '')
+};
+const FAVORITES_DETAIL_T = {
+  detailsLoading: 'Haetaan nimen tietoja…',
+  detailsError: 'Tietojen lataus epäonnistui.',
+  traitsTitle: 'Ominaisuudet',
+  historyTitle: 'Nimen suosio historiassa',
+  historyLegendMale: 'Miehiä',
+  historyLegendFemale: 'Naisia',
+  historyYAxis: 'Nimen suosio historiassa',
+  historyNoData: 'Ei historiallista käyttödataa',
+  ageDistributionTitle: 'Ikäjakauma (arvio)',
+  ageDistributionNoData: 'Ei ikäjakaumatietoa',
+  ageDistributionYAxis: 'Ikäjakauma (arvio)',
+  wikiTitle: 'Tietoa nimestä',
+  wikiLoading: 'Haetaan Wikipedia-tiivistelmää…',
+  wikiUnavailable: 'Wikipedia-artikkelia ei löytynyt'
 };
 const surnameUsageBuilder = (count, rank) => `Sukunimeä käyttää ${count} henkilöä ja se on ${rank}:s yleisin.`;
 
@@ -101,6 +112,13 @@ async function loadData() {
     .forEach((option) => {
       periodRanks.set(option.key, option.period);
     });
+  detailLoader = createCardDetailLoader({
+    ensureEntryDetails: (entry) => detailService.ensureEntryDetails(entry),
+    groupMeta,
+    phoneticMeta,
+    t: FAVORITES_DETAIL_T,
+    shouldShowAd: () => detailAds.shouldShow()
+  });
   buildSortOptions();
 }
 
@@ -151,7 +169,7 @@ function renderFavorites() {
       onFavoriteButton: (btn) => {
         favBtnRef = btn;
       },
-      onOpen: (detailsEl, bodyEl) => loadCardDetails(detailsEl, bodyEl, fullEntry)
+      onOpen: (detailsEl, bodyEl) => detailLoader?.(detailsEl, bodyEl, fullEntry)
     });
     if (pendingRemovals.has(name)) {
       card.classList.add('marked-remove');
@@ -337,134 +355,6 @@ function saveChanges() {
   saveFavorites(favorites, FAVORITES_KEY);
   updateSaveVisibility();
   renderFavorites();
-}
-
-function ensureEntryDetails(entry) {
-  if (!detailService) return Promise.resolve(entry);
-  return detailService.ensureEntryDetails(entry);
-}
-
-function createDetailRow(label, content) {
-  if (!content) return null;
-  const row = document.createElement('div');
-  row.className = 'detail-row';
-  const labelEl = document.createElement('div');
-  labelEl.className = 'detail-label';
-  labelEl.textContent = label;
-  const contentEl = document.createElement('div');
-  contentEl.className = 'detail-content';
-  if (typeof content === 'string') {
-    contentEl.innerHTML = content;
-  } else if (Array.isArray(content)) {
-    content.forEach((node) => contentEl.appendChild(node));
-  } else if (content instanceof Node) {
-    contentEl.appendChild(content);
-  }
-  row.appendChild(labelEl);
-  row.appendChild(contentEl);
-  return row;
-}
-
-async function loadCardDetails(card, body, entry) {
-  body.innerHTML = '<p class="hint">Haetaan nimen tietoja…</p>';
-  await ensureEntryDetails(entry);
-  body.innerHTML = '';
-  const wikiBlock = document.createElement('div');
-  wikiBlock.className = 'wiki-summary';
-  wikiBlock.dataset.status = 'idle';
-  body.appendChild(wikiBlock);
-
-  const details = document.createElement('div');
-  details.className = 'details-section';
-
-  const groupsHtml = renderGroupChips(entry, groupMeta, {
-    emptyLabel: 'Ei ryhmäjäsenyyksiä',
-    labelFor: (meta) => meta?.label || meta?.key,
-    describe: (meta) => meta?.description || ''
-  });
-  const groupRow = createDetailRow('Ryhmäjäsenyydet', groupsHtml);
-  if (groupRow) details.appendChild(groupRow);
-
-  const phoneticSummary = renderPhoneticSummary(entry, phoneticMeta, {
-    noHighlightsLabel: 'Ei erityisiä piirteitä',
-    labelFor: (meta) => meta?.label || meta?.key,
-    describe: (meta) => meta?.description || ''
-  });
-  if (phoneticSummary) {
-    const phoneticRow = createDetailRow('Äännepiirteet', phoneticSummary);
-    if (phoneticRow) details.appendChild(phoneticRow);
-  }
-
-  if (shouldShowDetailAd()) {
-    const ad = document.createElement('div');
-    ad.className = 'ad-slot detail-ad';
-    ad.textContent = 'Mainospaikka';
-    ad.hidden = true;
-    details.appendChild(ad);
-  }
-
-  const historyContent = document.createElement('div');
-  historyContent.className = 'chart-shell';
-  const historyChart = document.createElement('div');
-  historyChart.className = 'plotly-chart';
-  historyContent.appendChild(historyChart);
-  const historyRow = createDetailRow('Nimen suosio historiassa', historyContent);
-  if (historyRow) {
-    historyRow.classList.add('chart-row');
-    details.appendChild(historyRow);
-  }
-
-  const ageContent = document.createElement('div');
-  ageContent.className = 'chart-shell';
-  const ageChart = document.createElement('div');
-  ageChart.className = 'plotly-chart';
-  ageContent.appendChild(ageChart);
-  const ageRow = createDetailRow('Ikäjakauma (arvio)', ageContent);
-  if (ageRow) {
-    ageRow.classList.add('chart-row');
-    details.appendChild(ageRow);
-  }
-
-  body.appendChild(details);
-
-  const descriptionText = entry.description_fi || '';
-  if (descriptionText) {
-    const desc = document.createElement('div');
-    desc.className = 'description';
-    desc.textContent = descriptionText;
-    body.appendChild(desc);
-  }
-  // Affiliate link piilotettuna oletuksena; näytettävissä vain kun kumppani on käytössä
-  const affiliateLink = document.createElement('a');
-  affiliateLink.className = 'affiliate-link';
-  affiliateLink.href = '#';
-  affiliateLink.textContent = 'Tilaa vauvan nimellä varustettu body';
-  affiliateLink.target = '_blank';
-  affiliateLink.rel = 'noopener';
-  affiliateLink.hidden = true;
-  body.appendChild(affiliateLink);
-
-  renderUsageChart(historyChart, entry.history, {
-    noData: 'Ei historiallista käyttödataa',
-    legendMale: 'Miehiä',
-    legendFemale: 'Naisia',
-    yAxis: 'Nimen suosio historiassa'
-  });
-  renderAgeDistributionChart(ageChart, entry.population, entry.popularity?.total, {
-    noData: 'Ei ikäjakaumatietoa',
-    yAxis: 'Ikäjakauma (arvio)'
-  });
-  if (wikiBlock) {
-    fetchWikiSummary(entry, wikiBlock, {
-      loadingText: 'Haetaan Wikipedia-tiivistelmää…',
-      unavailableText: 'Wikipedia-artikkelia ei löytynyt',
-      title: 'Tietoa Wikipediasta'
-    });
-  }
-}
-
-function shouldShowDetailAd() {
-  return detailAds.shouldShow();
 }
 function decodeActiveNames() {
   const params = new URLSearchParams(window.location.search);

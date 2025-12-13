@@ -1,21 +1,14 @@
 import { createCardShell } from './shared-cards.js';
 import { loadDataset } from './data-service.js';
 import { createDetailService } from './detail-service.js';
-import {
-  createAdTracker,
-  formatCount,
-  renderAgeDistributionChart,
-  renderGroupChips,
-  renderPhoneticSummary,
-  renderUsageChart,
-  fetchWikiSummary
-} from './detail-utils.js';
+import { createAdTracker } from './detail-utils.js';
 import { FAVORITES_KEY, loadFavorites, saveFavorites } from './favorites-store.js';
 import { loadMatchingModel, computePairScore as computeModelPairScore, computeBuckets } from './matching-model.js';
 import { buildExplanation, friendlyBucket } from './explain-utils.js';
 import { registerAdSlots, setAdSlotsEnabled } from './ad-service.js';
 import { buildSurnameData, formatSurnameUsage } from './surname-service.js';
 import MATCH_WEIGHT_FIELDS from './weight-fields.js';
+import { createCardDetailLoader } from './name-detail-renderer.js';
 import {
   areWeightsEqual,
   computeAbsoluteWeightBudget,
@@ -149,6 +142,7 @@ let orderedResults = [];
 let transitionConfig = null;
 let matchingModel = null;
 let detailService = null;
+let cardDetailLoader = null;
 const LETTER_LIMITS = { min: 1, max: 20 };
 const POPULATION_LIMITS = { min: 0, max: 45000 };
 let populationBaseEstimate = 5600000;
@@ -312,6 +306,14 @@ function buildMetaMaps() {
   surnameRankMap = surnameData.rankMap;
   transitionConfig = data.schema.matching?.transitions || null;
   detailService = createDetailService(data.schema);
+  cardDetailLoader = createCardDetailLoader({
+    ensureEntryDetails: (entry) => detailService.ensureEntryDetails(entry),
+    groupMeta,
+    phoneticMeta,
+    t: translations.fi,
+    shouldShowAd: shouldShowDetailAd,
+    buildHistoryLabel: (entry) => createHistoryLabel(entry, translations.fi)
+  });
   filterFeatureMeta = data.schema.filterFeatures || [];
 }
 
@@ -345,11 +347,6 @@ function normalizeTransitionProbability(probability) {
     normalized = (probability - baseline) / baseline;
   }
   return clampSigned(normalized);
-}
-
-function ensureEntryDetails(entry) {
-  if (!detailService) return Promise.resolve(entry);
-  return detailService.ensureEntryDetails(entry);
 }
 
 function normalizeLetterFilter(value) {
@@ -1944,7 +1941,8 @@ function createNameCard(entry, t, surnameEntry, { filtered = false } = {}) {
     filtered,
     isFavorite: () => isFavoriteName(entry.name),
     toggleFavorite: toggleFavoriteName,
-    onOpen: (detailsEl, bodyEl) => loadCardDetails(detailsEl, bodyEl, entry, t, surnameEntry)
+    onOpen: (detailsEl, bodyEl) =>
+      cardDetailLoader?.(detailsEl, bodyEl, entry, { surnameEntry })
   });
 }
 
@@ -2122,135 +2120,6 @@ function renderResults(restoreResultsScroll) {
     loadMoreBtn.textContent = hasMore ? 'Näytä lisää nimiä' : 'Ei enempää nimiä';
   }
   restoreResultsScroll?.();
-}
-
-function loadCardDetails(card, bodyContainer, entry, t, surnameEntry) {
-  if (card.dataset.hydrated === 'true') {
-    if (card._detailRefs?.wikiBlock) {
-      fetchWikiSummary(entry, card._detailRefs.wikiBlock, {
-        loadingText: t.wikiLoading,
-        unavailableText: t.wikiUnavailable,
-        title: t.wikiTitle,
-        includeLink: true,
-        linkLabel: 'Wikipedia'
-      });
-    }
-    return;
-  }
-  if (card.dataset.loading === 'true') {
-    return;
-  }
-  card.dataset.loading = 'true';
-  bodyContainer.innerHTML = `<p class="hint">${t.detailsLoading}</p>`;
-  ensureEntryDetails(entry)
-    .then(() => {
-      card.dataset.loading = 'false';
-      const refs = hydrateCardBody(card, bodyContainer, entry, t, surnameEntry);
-      if (refs?.wikiBlock) {
-        fetchWikiSummary(entry, refs.wikiBlock, {
-          loadingText: t.wikiLoading,
-          unavailableText: t.wikiUnavailable,
-          title: t.wikiTitle,
-          includeLink: true,
-          linkLabel: 'Wikipedia'
-        });
-      }
-    })
-    .catch(() => {
-      card.dataset.loading = 'false';
-      bodyContainer.innerHTML = `<p class="hint">${t.detailsError}</p>`;
-    });
-}
-
-function hydrateCardBody(card, container, entry, t, surnameEntry) {
-  container.innerHTML = '';
-  const wikiBlock = document.createElement('div');
-  wikiBlock.className = 'wiki-summary';
-  wikiBlock.dataset.status = 'idle';
-  container.appendChild(wikiBlock);
-
-  const details = document.createElement('div');
-  details.className = 'details-section';
-  const groupsHtml = renderCombinedTraits(entry, t);
-  if (groupsHtml) {
-    const groupRow = createDetailRow('Ominaisuudet', groupsHtml);
-    if (groupRow) details.appendChild(groupRow);
-  }
-
-  if (surnameEntry) {
-    const comboContent = renderComboEstimate(entry, t, surnameEntry);
-    if (comboContent) {
-      const comboRow = createDetailRow(t.comboRowLabel, comboContent);
-      if (comboRow) details.appendChild(comboRow);
-    }
-  }
-
-  if (surnameEntry && shouldShowDetailAd()) {
-    const ad = document.createElement('div');
-    ad.className = 'ad-slot detail-ad';
-    ad.textContent = 'Mainospaikka';
-    ad.hidden = true;
-    details.appendChild(ad);
-  }
-
-  const historyContent = document.createElement('div');
-  historyContent.className = 'chart-shell';
-  const historyChart = document.createElement('div');
-  historyChart.className = 'plotly-chart';
-  historyContent.appendChild(historyChart);
-  const historyLabel = createHistoryLabel(entry, t);
-  const historyRow = createDetailRow(historyLabel, historyContent, { asHtml: true });
-  if (historyRow) {
-    historyRow.classList.add('chart-row');
-    details.appendChild(historyRow);
-  }
-
-  const ageContent = document.createElement('div');
-  ageContent.className = 'chart-shell';
-  const ageChart = document.createElement('div');
-  ageChart.className = 'plotly-chart';
-  ageContent.appendChild(ageChart);
-  const ageRow = createDetailRow(t.ageDistributionTitle, ageContent);
-  if (ageRow) {
-    ageRow.classList.add('chart-row');
-    details.appendChild(ageRow);
-  }
-
-  container.appendChild(details);
-
-  const descriptionText = entry.description_fi || '';
-  if (descriptionText) {
-    const desc = document.createElement('div');
-    desc.className = 'description';
-    desc.textContent = descriptionText;
-    container.appendChild(desc);
-  }
-  const affiliateLink = document.createElement('a');
-  affiliateLink.className = 'affiliate-link';
-  affiliateLink.href = '#';
-  affiliateLink.textContent = 'Tilaa vauvan nimellä varustettu body';
-  affiliateLink.target = '_blank';
-  affiliateLink.rel = 'noopener';
-  affiliateLink.hidden = true;
-  container.appendChild(affiliateLink);
-
-  const historyContainer = historyChart;
-  renderUsageChart(historyContainer, entry.history, {
-    noData: t.historyNoData,
-    legendMale: t.historyLegendMale,
-    legendFemale: t.historyLegendFemale,
-    yAxis: t.historyYAxis
-  });
-  const ageContainer = ageChart;
-  renderAgeDistributionChart(ageContainer, entry.population, entry.popularity.total, {
-    noData: t.ageDistributionNoData,
-    yAxis: t.ageDistributionYAxis
-  });
-
-  card.dataset.hydrated = 'true';
-  const refs = { wikiBlock, historyContainer, ageContainer };
-  card._detailRefs = refs;
-  return refs;
 }
 
 function formatPercent(value) {
@@ -2679,54 +2548,8 @@ function createHistoryLabel(entry, t) {
   return `${base} (<a href="${url}" target="_blank" rel="noopener">${linkText}</a>)`;
 }
 
-function createDetailRow(label, content, options = {}) {
-  if (!content) return null;
-  const row = document.createElement('div');
-  row.className = 'detail-row';
-  const labelEl = document.createElement('div');
-  labelEl.className = 'detail-label';
-  if (options.asHtml) {
-    labelEl.innerHTML = label;
-  } else {
-    labelEl.textContent = label;
-  }
-  const contentEl = document.createElement('div');
-  contentEl.className = 'detail-content';
-  if (typeof content === 'string') {
-    contentEl.innerHTML = content;
-  } else if (Array.isArray(content)) {
-    content.forEach((node) => contentEl.appendChild(node));
-  } else if (content instanceof Node) {
-    contentEl.appendChild(content);
-  }
-  row.appendChild(labelEl);
-  row.appendChild(contentEl);
-  return row;
-}
-
 function resetDetailAdCounter() {
   detailAds.reset();
-}
-
-function renderComboEstimate(entry, t, surnameEntry) {
-  if (!entry._comboEstimate || !surnameEntry) {
-    return '';
-  }
-  const countText = formatCount(entry._comboEstimate);
-  return `~${countText} (${t.comboRowNote})`;
-}
-
-function renderCombinedTraits(entry, t) {
-  const groupHtml = renderGroupChips(entry, groupMeta, {
-    emptyLabel: t.noGroupMembership,
-    labelFor: (meta) => getGroupLabel(meta) || meta?.key,
-    describe: (meta) => meta?.description || meta?.label || ''
-  });
-  const phoneticHtml = renderPhoneticSummary(entry, phoneticMeta, {
-    labelFor: (meta) => getFeatureLabel(meta) || meta?.key,
-    describe: (meta) => getFeatureDescription(meta?.key || '')
-  });
-  return [groupHtml, phoneticHtml].filter(Boolean).join(' ');
 }
 
 function updateUrl() {

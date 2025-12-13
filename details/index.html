@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="fi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nimitiedot | Nimi vauvalle</title>
+    <meta
+      name="description"
+      content="Katso nimen suosiohistoria, äännepiirteet ja muut tiedot. Syötä osoitteeseen ?name=Etunimi."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Mea+Culpa&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+    <link rel="stylesheet" id="silktide-consent-manager-css" href="../cookie-banner/silktide-consent-manager.css" />
+    <script src="../cookie-banner/silktide-consent-manager.js"></script>
+    <link rel="stylesheet" href="../cookie-banner/consent-overrides.css" />
+    <script src="../cookie-banner/consent-config.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+  </head>
+  <body data-nav-label="Siirry etusivulle" data-nav-href="/">
+    <main class="layout">
+      <header class="page-header">
+        <a class="ghost favorite-nav" href="/">Siirry etusivulle</a>
+        <div class="branding wide">
+          <p class="hero-subtitle" id="detail-subtitle">Ladataan nimen tietoja…</p>
+        </div>
+      </header>
+      <section class="content-block" id="detail-content">
+        <p class="hint" id="detail-status">Ladataan tietoja…</p>
+      </section>
+    </main>
+    <div data-include="../footer.html"></div>
+    <script type="module">
+      import { initPageChrome } from '../site.js';
+      import { initDetailsPage } from './details.js';
+      initPageChrome({ loadContent: true });
+      initDetailsPage();
+    </script>
+  </body>
+</html>

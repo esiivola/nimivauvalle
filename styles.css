@@ -445,12 +445,11 @@ a.link-button:hover {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.45rem 0.55rem 0.45rem 1.2rem;
   line-height: 1.35;
 }
 
 #articles-strip-panel > summary {
-  padding-right: 1rem;
+  padding-right: 1.4rem;
 }
 
 :is(.summary-toggle, .collapsible, #articles-strip-panel, #extra-filter-panel, .filter-like) > summary::-webkit-details-marker,
@@ -461,18 +460,15 @@ a.link-button:hover {
 
 :is(.summary-toggle, .collapsible, #articles-strip-panel, #extra-filter-panel, .filter-like) > summary::before {
   content: '▸';
-  position: absolute;
-  left: 0rem;
-  top: 50%;
-  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  align-self: center;
+  width: 20px;
+  height: 20px;
   color: var(--text);
   font-weight: 700;
-  font-size: 2rem;
+  font-size: 1.25rem;
   line-height: 1;
   background: transparent;
 }
