@@ -286,8 +286,14 @@ a.link-button:hover {
   min-width: 0;
 }
 
-#articles-strip-panel .strip-body,
 #blog-strip-panel .strip-body {
+  margin-top: 0.75rem;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+#articles-strip-panel .strip-body {
   display: none;
   margin-top: 0.75rem;
   width: 100%;
@@ -297,13 +303,11 @@ a.link-button:hover {
   max-width: 100%;
 }
 
-#articles-strip-panel[open] .strip-body,
-#blog-strip-panel[open] .strip-body {
+#articles-strip-panel[open] .strip-body {
   display: block;
 }
 
-#articles-strip-panel .strip-controls,
-#blog-strip-panel .strip-controls {
+#articles-strip-panel .strip-controls {
   position: absolute;
   right: 0.25rem;
   top: 50%;
@@ -312,8 +316,7 @@ a.link-button:hover {
   gap: 0.35rem;
 }
 
-#articles-strip-panel[open] .strip-controls,
-#blog-strip-panel[open] .strip-controls {
+#articles-strip-panel[open] .strip-controls {
   display: inline-flex;
 }
 

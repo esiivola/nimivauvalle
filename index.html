@@ -103,10 +103,11 @@
       <p class="page-motivation">
       Nimi on aina tunnepäätös, joten sen miettimiselle kannattaa varata tarpeeksi aikaa. Nimeä ei myöskään kannata lukita etukäteen, sillä uuden tyypin temperamentti ja kasvonpiirteet voivat hyvinkin saada jonkin toisen nimen sopimaan hänelle ensisijaista vaihtoehtoa paremmin. Myös muoti ja aika vaikuttavat nimiin. Esimerkiksi tällä hetkellä lapsille annetaan paljon pehmeän kuuloisia nimiä, jotka olivat yleisiä myös 1900-luvun alussa. Etunimeä valitessa kannattaa myös muistaa, että lapsi kasvaa. Suloinen nimi voi toimia hyvin vauvalle, muttei välttämättä aikuiselle. Tämän sivuston tarkoitus on tarjota mahdollisimman paljon tietoa sopivan etunimen valintaan. Voit tallentaa nimiä suosikeiksi ja jakaa suosikkilistan vaikkapa puolisollesi. Onnea tärkeään nimenvalintatehtävään! <button class="link-button" type="button" id="open-story" data-action="open-story">Lue täältä sivuston tarina.</button>
       </p>
-      <details class="content-block blog-summary" id="blog-strip-panel" open>
-  <summary class="blog-summary__header" tabindex="-1">
-    Vauva-arkeen liittyviä artikkeleita:
-  </summary>
+      
+  <div class="content-block blog-summary" id="blog-strip-panel">
+  <div class="blog-summary__header" tabindex="-1">
+    Vauva-arkeen liittyviä artikkeleja:
+  </div>
   <div class="strip-body">
     <div class="article-grid" id="blog-strip-list" role="list">
       <article class="article-card" role="listitem">
@@ -159,9 +160,8 @@
       </article>
     </div>
   </div>
-</details>
-      </section>
-      <section data-include="content/articles-strip.html">
+</div>
+<section data-include="content/articles-strip.html">
         <p class="hint">Ladataan artikkeleja…</p>
       </section>
       <section class="filters" aria-labelledby="filters-title">
@@ -257,7 +257,6 @@
       </section>
 
       <section class="results" id="results" aria-live="polite">
-        <div class="ad-slot ad-inline-top" aria-label="Results ad placeholder" hidden>Mainospaikka</div>
         <div class="results-meta">
           <div class="results-bar">
             <div>
@@ -279,12 +278,8 @@
           <button type="button" class="primary" id="load-more" disabled>Näytä lisää nimiä</button>
         </div>
       </section>
-      <aside class="ad-rail ad-rail-fixed" aria-label="Side ad placeholder">
-        <div class="ad-slot ad-rail-slot" hidden>Mainospaikka</div>
-      </aside>
-      <aside class="ad-rail ad-rail-scroll" aria-label="Side ad placeholder">
-        <div class="ad-slot ad-rail-slot" hidden>Mainospaikka</div>
-      </aside>
+      <aside class="ad-rail ad-rail-fixed" aria-label="Side ad placeholder"></aside>
+      <aside class="ad-rail ad-rail-scroll" aria-label="Side ad placeholder"></aside>
     </main>
     <div data-include="footer.html"></div>
 
