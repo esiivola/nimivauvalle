@@ -82,16 +82,20 @@ function syllableProfile(syllable) {
       close_ratio: 0,
       mid_ratio: 0,
       open_ratio: 0,
-      soft_ratio: 0.5,
+      soft_ratio: 1,
       valence: 0
     };
   }
   const vowels = Array.from(text).filter((c) => FRONT_VOWELS.has(c) || NEUTRAL_VOWELS.has(c) || BACK_VOWELS.has(c));
   const openSet = Array.from(text).filter((c) => CLOSE_VOWELS.has(c) || MID_VOWELS.has(c) || OPEN_VOWELS.has(c));
   const cons = Array.from(text).filter((c) => SOFT_CONS.has(c) || HARD_CONS.has(c));
+  const softCount = cons.filter((c) => SOFT_CONS.has(c)).length;
+  const hardCount = cons.filter((c) => HARD_CONS.has(c)).length;
   const vals = Array.from(text)
     .map((c) => VALENCE_MAP[c])
     .filter((v) => v !== undefined);
+  const softRatio =
+    hardCount === 0 ? 1 : ratio(softCount, softCount + hardCount, 1);
   return {
     front_ratio: ratio(vowels.filter((c) => FRONT_VOWELS.has(c)).length, vowels.length),
     neutral_ratio: ratio(vowels.filter((c) => NEUTRAL_VOWELS.has(c)).length, vowels.length),
@@ -99,7 +103,7 @@ function syllableProfile(syllable) {
     close_ratio: ratio(openSet.filter((c) => CLOSE_VOWELS.has(c)).length, openSet.length),
     mid_ratio: ratio(openSet.filter((c) => MID_VOWELS.has(c)).length, openSet.length),
     open_ratio: ratio(openSet.filter((c) => OPEN_VOWELS.has(c)).length, openSet.length),
-    soft_ratio: ratio(cons.filter((c) => SOFT_CONS.has(c)).length, cons.length, 0.5),
+    soft_ratio: softRatio,
     valence: ratio(vals.reduce((a, b) => a + b, 0), vals.length)
   };
 }

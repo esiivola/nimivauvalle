@@ -103,8 +103,11 @@
       <p class="page-motivation">
       Nimi on aina tunnepäätös, joten sen miettimiselle kannattaa varata tarpeeksi aikaa. Nimeä ei myöskään kannata lukita etukäteen, sillä uuden tyypin temperamentti ja kasvonpiirteet voivat hyvinkin saada jonkin toisen nimen sopimaan hänelle ensisijaista vaihtoehtoa paremmin. Myös muoti ja aika vaikuttavat nimiin. Esimerkiksi tällä hetkellä lapsille annetaan paljon pehmeän kuuloisia nimiä, jotka olivat yleisiä myös 1900-luvun alussa. Etunimeä valitessa kannattaa myös muistaa, että lapsi kasvaa. Suloinen nimi voi toimia hyvin vauvalle, muttei välttämättä aikuiselle. Tämän sivuston tarkoitus on tarjota mahdollisimman paljon tietoa sopivan etunimen valintaan. Voit tallentaa nimiä suosikeiksi ja jakaa suosikkilistan vaikkapa puolisollesi. Onnea tärkeään nimenvalintatehtävään! <button class="link-button" type="button" id="open-story" data-action="open-story">Lue täältä sivuston tarina.</button>
       </p>
+      <section data-include="content/blog-strip.html">
+        <p class="hint">Ladataan artikkeleja…</p>
+      </section>
       <section data-include="content/articles-strip.html">
-        <p class="hint">Ladataan artikkeleita…</p>
+        <p class="hint">Ladataan artikkeleja…</p>
       </section>
       <section class="filters" aria-labelledby="filters-title">
         <h2 id="filters-title">Millaista nimeä etsit?</h2>
@@ -316,14 +319,19 @@
         </header>
         <p class="story-text">
           Sivuston kehitys alkoi syksyllä 2025 perheen esikoista odottaessa. Lapsen nimen pähkäily on yksi raskausajan mukavimmista asioista. Netin pitkiä nimilistoja selatessa keskittyminen alkoi kuitenkin herpaantua melko pian. Perheen isä totesi, että tämän voi tehdä paremminkin, ja päätti toteuttaa Suomen parhaan nettisivun vauvan nimen valintaan.<br> <br>
-          Sivusto näyttää kulujen kattamiseksi kohtuullisen määrän mainoksia. Jos haluat tukea sivuston kehitystyötä enemmän, voit harkita ostavasi jotain sivuston vauva-arkeen liityvien kumppanuuslinkkien kautta.<br>
+          Sivusto näyttää kulujen kattamiseksi mainoksia. Jos haluat tukea sivuston kehitystyötä enemmän, voit harkita ostavasi jotain sivuston kestävään ja eettiseen vauva-arkeen liityvien kumppanuuslinkkien kautta.<br>
           <p class="hint">Sivuston ylläpitäjä: <a class="ghost link-button" href="mailto:nimivauvalle@gmail.com">nimivauvalle@gmail.com</a></p>
         </p>
       </div>
     </div>
     <script type="module">
       import { initPageChrome } from './site.js';
-      initPageChrome({ enhanceArticles: true, openArticlesFromQuery: true, scrollToHash: true });
+      initPageChrome({
+        enhanceArticles: true,
+        openArticlesFromQuery: true,
+        scrollToHash: true,
+        enhanceBlogs: true
+      });
     </script>
   </body>
 </html>

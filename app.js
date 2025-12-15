@@ -174,6 +174,7 @@ const expandedFilteredBlocks = new Set();
 let surnameExplainLink = null;
 let surnameExplainModal = null;
 let hasScrolledToResults = false;
+let pendingResultsScroll = false;
 const SCROLL_FLAG_KEY = 'scrollToResults';
 
 const $ = (sel) => document.querySelector(sel);
@@ -2667,11 +2668,13 @@ function bindEvents() {
     url.searchParams.set('openArticles', '1');
     url.hash = 'results';
     sessionStorage.setItem(SCROLL_FLAG_KEY, '1');
-    const target = document.getElementById('results');
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
     window.location.href = url.toString();
+  });
+  document.addEventListener('blog-strip-ready', () => {
+    if (hasScrolledToResults || sessionStorage.getItem(SCROLL_FLAG_KEY) === '1') {
+      pendingResultsScroll = true;
+      scrollToResultsIfNeeded();
+    }
   });
   document.querySelectorAll('input[name="gender"]').forEach((checkbox) => {
     checkbox.addEventListener('change', () => applyFilters());
@@ -2714,17 +2717,26 @@ function closeSurnameExplain() {
 }
 
 function scrollToResultsIfNeeded() {
-  if (hasScrolledToResults) return;
   const shouldScroll =
-    window.location.hash === '#results' || sessionStorage.getItem(SCROLL_FLAG_KEY) === '1';
+    window.location.hash === '#results' || sessionStorage.getItem(SCROLL_FLAG_KEY) === '1' || pendingResultsScroll;
   if (!shouldScroll) return;
   const target = document.getElementById('results');
   if (!target) return;
   hasScrolledToResults = true;
+  pendingResultsScroll = true;
   sessionStorage.removeItem(SCROLL_FLAG_KEY);
+  const scrollToTarget = () => {
+    const rect = target.getBoundingClientRect();
+    const top = rect.top + window.scrollY - 8;
+    window.scrollTo({ top, behavior: 'smooth' });
+  };
   requestAnimationFrame(() => {
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    scrollToTarget();
+    setTimeout(scrollToTarget, 220);
   });
+  setTimeout(() => {
+    pendingResultsScroll = false;
+  }, 500);
 }
 
 async function init() {

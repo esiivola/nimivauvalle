@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Blogi | Nimi vauvalle</title>
+    <meta name="description" content="Nimivauvalle.fi blogi – vinkkejä, taustaa ja käytännön ohjeita vauva-arkeen ja nimivalintaan." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Mea+Culpa&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body data-nav-label="Takaisin hakuun" data-nav-href="/">
+    <main class="layout">
+      <header class="page-header">
+        <a class="ghost favorite-nav" href="/">Takaisin hakuun</a>
+        <div class="branding wide">
+          <h1 class="hero-title">Nimi vauvalle</h1>
+        </div>
+      </header>
+
+      <article class="content-block blog-summary" open>
+        <summary class="blog-summary__header" tabindex="-1">Kaikki artikkelit</summary>
+          <div class="strip-body" id="blog-list">
+            <p class="hint">Ladataan artikkeleja…</p>
+          </div>
+      </article>
+      </article>
+    </main>
+    <div data-include="../footer.html"></div>
+    <script type="module">
+      import { initPageChrome } from '../site.js';
+      import './list.js';
+      initPageChrome({ loadContent: true });
+    </script>
+  </body>
+</html>

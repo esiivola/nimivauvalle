@@ -178,7 +178,8 @@ export async function initPageChrome(options = {}) {
     loadContent = true,
     enhanceArticles = false,
     openArticlesFromQuery = false,
-    scrollToHash = false
+    scrollToHash = false,
+    enhanceBlogs = false
   } = options;
 
   ensureFavicon();
@@ -201,6 +202,10 @@ export async function initPageChrome(options = {}) {
 
   if (scrollToHash) {
     scrollToHashTarget();
+  }
+
+  if (enhanceBlogs) {
+    initBlogStrip();
   }
 }
 
@@ -259,24 +264,21 @@ export function initArticleStrips() {
     if (!strip) return;
     const prev = block.querySelector('.strip-prev');
     const next = block.querySelector('.strip-next');
-    const baseScroll = 260;
-    const minHoldStep = 20;
+    const minScroll = 5;
+    const minHoldStep = 5;
     const getScrollAmount = () => {
       const firstCard = strip.querySelector('.article-card');
       const styles = getComputedStyle(strip);
-      const gap =
-        parseFloat(styles.columnGap || styles.gap || '0') || 0;
-      const cardWidth = firstCard
-        ? firstCard.getBoundingClientRect().width + gap
-        : 0;
-      const stripWidth = strip.getBoundingClientRect().width;
-      if (window.matchMedia('(max-width: 640px)').matches) {
-        return Math.max(cardWidth, stripWidth, baseScroll);
-      }
-      return Math.max(cardWidth || stripWidth, baseScroll);
+      const gap = parseFloat(styles.columnGap || styles.gap || '0') || 0;
+      const stripWidth = strip.getBoundingClientRect().width || 0;
+      const cardWidth = firstCard ? firstCard.getBoundingClientRect().width + gap : stripWidth || minScroll;
+      const base = Math.max(cardWidth * 0.65, stripWidth * 0.45);
+      const capped = stripWidth ? Math.min(base, stripWidth * 0.75) : base;
+      return Math.max(minScroll, Math.round(capped));
     };
     const getHoldStep = () => Math.max(minHoldStep, Math.round(getScrollAmount() / 10));
     let holdFrame = null;
+    let holdTimer = null;
 
     const scrollBy = (dir) => {
       strip.scrollLeft = Math.max(0, strip.scrollLeft + dir * getScrollAmount());
@@ -290,6 +292,17 @@ export function initArticleStrips() {
         cancelAnimationFrame(holdFrame);
         holdFrame = null;
       }
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+    };
+    const startHold = (dir) => {
+      stopHold();
+      holdTimer = setTimeout(() => {
+        holdTimer = null;
+        stepScroll(dir);
+      }, 140);
     };
     const attachHold = (btn, dir) => {
       if (!btn) return;
@@ -297,7 +310,7 @@ export function initArticleStrips() {
       btn.addEventListener('pointerdown', (event) => {
         event.preventDefault();
         stopHold();
-        stepScroll(dir);
+        startHold(dir);
       });
       ['pointerup', 'pointerleave', 'pointercancel', 'blur'].forEach((ev) => {
         btn.addEventListener(ev, stopHold);
@@ -307,6 +320,44 @@ export function initArticleStrips() {
     attachHold(prev, -1);
     attachHold(next, 1);
   });
+}
+
+async function initBlogStrip() {
+  const panel = document.getElementById('blog-strip-panel');
+  if (panel) {
+    panel.open = true;
+    panel.addEventListener('toggle', () => {
+      if (!panel.open) {
+        panel.open = true;
+      }
+    });
+  }
+  const strip = document.getElementById('blog-strip-list');
+  if (!strip) return;
+  strip.innerHTML = '<p class="hint">Ladataan artikkeleja…</p>';
+  try {
+    const res = await fetch('/artikkelit/index.json', { cache: 'no-cache' });
+    if (!res.ok) throw new Error('index missing');
+    const posts = await res.json();
+    strip.innerHTML = '';
+    posts.forEach((post) => {
+      const card = document.createElement('article');
+      card.className = 'article-card';
+      card.setAttribute('role', 'listitem');
+      const h3 = document.createElement('h3');
+      h3.textContent = post.title || post.slug;
+      const p = document.createElement('p');
+      const desc = post.description || '';
+      p.innerHTML = `${desc ? `${desc} ` : ''}<a class="article-cta inline" href="/artikkelit/${post.slug}.html">Lue artikkeli</a>`;
+      card.appendChild(h3);
+      card.appendChild(p);
+      strip.appendChild(card);
+    });
+    document.dispatchEvent(new CustomEvent('blog-strip-ready'));
+  } catch {
+    strip.innerHTML = '<p class="hint">Artikkelilistaa ei voitu ladata.</p>';
+    document.dispatchEvent(new CustomEvent('blog-strip-ready'));
+  }
 }
 
 export function openArticlesPanelFromQuery() {

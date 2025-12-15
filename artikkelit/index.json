@@ -1,0 +1,62 @@
+[
+  {
+    "slug": "01-second-hand",
+    "title": "Suosi kirppiksiä ja säästä rahaa",
+    "description": "Lapsi maksaa tuhansia euroja vuodessa. Suosimalla käytettyä säästät lompakkoa ja ympäristöä. Katso täältä parhaat vinkit käytettyjen varusteiden ostamiseen!"
+  },
+  {
+    "slug": "02-kuinka-valmistautua",
+    "title": "Mitä hankkia ennen vauvan syntymää?",
+    "description": "Vauvan saaminen avaa useimpien kukkaron nyörit uusille hankinnoille melko helposti. Mitä jos sanoisimme, että pärjäät oikeasti vähemmällä? Täältä löydät listan siitä, mitä oikeasti tarvitset."
+  },
+  {
+    "slug": "03-kuinka-valita-nimi",
+    "title": "Muista ainakin nämä lapsen nimeä valitessa!",
+    "description": "Etunimi kulkee mukanana usein koko elämän, joten sen valintaan kannattaa käyttää harkintaa. Näiden kahdeksan käytännön vinkin avulla vältät pahimmat sudenkuopat nimenvalinnassa."
+  },
+  {
+    "slug": "04-vähemmän-on-tarpeeksi",
+    "title": "Miksi vähempi riittää?",
+    "description": "Media ja mainokset luovat helposti paineita vauva-ajan hankinnoille. Tutkimusten mukaan vähempi tavaramäärä voi kuitenkin tukea sekä lapsen että vanhemman hyvinvointia. Lue täältä vinkit stressitömämpään vauva-arkeen."
+  },
+  {
+    "slug": "05-nimilaki",
+    "title": "Nimilain asettamat raamit",
+    "description": "Suomessa etunimen valintaa ohjaa nimilaki. Se antaa vapautta, mutta asettaa myös rajoja lapsen edun turvaamiseksi. Lue täältä, miksi nimilaki on tärkeä."
+  },
+  {
+    "slug": "06-apua-vauva-arkeen",
+    "title": "Mistä apua vauva-arkeen?",
+    "description": "Vinkkejä, puhelinnumeroita ja palveluita lapsiperheille Suomessa. Lue täältä, mistä saat apua kun vauva-arki kaatuu päälle."
+  },
+  {
+    "slug": "07-metatyo",
+    "title": "Tasapuolinen vauva-arki kahdelle vanhemmalle",
+    "description": "Konkreettisia vinkkejä tasapuoliseen vauva-arkeen kahdelle vanhemmalle. Näillä vinkeillä teet meta- ja kotityöt näkyväksi ja hallitsette kumppaninne kanssa vauva-arjen kuormituksen paremmin."
+  },
+  {
+    "slug": "08-mentaalikuorma",
+    "title": "Metatyö ja vauva-arki",
+    "description": "Vauva-arki sisältää paljon sellaista työtä, jota ei näe kalenterissa tai tehtävälistoissa. Metatyön tunnistaminen ja jakaminen on tutkitusti keskeinen tekijä vanhempien hyvinvoinnille. Lue täältä enemmän metatyöstä."
+  },
+  {
+    "slug": "09-vanhempainvapaa",
+    "title": "Lisääkö uusi perhevapaamalli tasa-arvoa?",
+    "description": "Vuoden 2022 perhevapaauudistus pyrkii tasa-arvoisempaan vanhemmuuteen. Jaettu vanhempainvapaa luo lainsäädännöllisen pohjan, mutta vaikutukset syntyvät vasta perheiden arjessa. Lue täältä perhevapaiden uudistuksen tavoitteista ja tuloksista."
+  },
+  {
+    "slug": "10-isa-lapsi-suhde",
+    "title": "Isän ja vauvan varhainen vuorovaikutus",
+    "description": "Tutkimusten mukaan isän varhainen osallistuminen vauvan hoivaan tukee lapsen kehitystä, vahvistaa kiintymyssuhdetta ja edistää koko perheen hyvinvointia. Lue täältä, miksi molempien vanhempien osallistuminen hoivaan kannattaa."
+  },
+  {
+    "slug": "11-nimitrendit-2020-luvulla",
+    "title": "Nimitrendit 2020-luvulla",
+    "description": "Etunimien suosio muuttuu hitaasti. 2020-luvun nimimuodissa korostuvat tutut nimet, luontonimet ja kansainvälisesti toimivat valinnat. Lue täältä, millaisia nimiä lapsille nykyisin annetaan."
+  },
+  {
+    "slug": "12-nimenantoseremonia",
+    "title": "Ristiäiset vai nimiäiset?",
+    "description": "Lapsen nimen julkistaminen tapahtuu Suomessa joko ristiäisissä tai nimiäisissä. Molemmat ovat yleisiä ja juridisesti yhtä päteviä tapoja. Lue täältä, mitä kumpikin käytännössä tarkoittaa."
+  }
+]
