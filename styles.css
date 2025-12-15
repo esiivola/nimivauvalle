@@ -135,6 +135,15 @@ section[data-include="content/blog-strip.html"] {
 .page-motivation {
   color: var(--muted);
   font-size: 1rem;
+  margin: 0.1rem 0;
+}
+
+.page-motivation p {
+  margin: 0.1rem 0;
+}
+
+.page-motivation p ul li {
+  margin: 0.1rem 0;
 }
 
 a.link-button {
@@ -258,6 +267,16 @@ a.link-button:hover {
 }
 
 .content-block a:not(.article-card):not(.link-button):hover {
+  color: var(--text);
+}
+
+a.article-cta.inline {
+  color: var(--accent);
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+a.article-cta.inline:hover {
   color: var(--text);
 }
 
