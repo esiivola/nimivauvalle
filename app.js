@@ -21,6 +21,10 @@ import {
   serializeWeightOverrides,
   weightToPercent
 } from './weight-utils.js';
+import {
+  readFilterQuery,
+  writeFilterQuery
+} from './state-store.js';
 
 const PAGE_SIZE = 50;
 
@@ -510,8 +514,28 @@ function nextGroupFilterId() {
   return `gf-${groupFilterId}`;
 }
 
-function restoreFromQuery() {
-  const params = new URLSearchParams(window.location.search);
+function resetFilterIds() {
+  filterId = 0;
+  groupFilterId = 0;
+}
+
+function resetFilterState() {
+  state.genders = new Set(['female', 'male', 'unisex']);
+  state.surname = '';
+  state.includeLettersInput = '';
+  state.excludeLettersInput = '';
+  state.letterRange = { min: LETTER_LIMITS.min, max: LETTER_LIMITS.max };
+  state.populationRange = { min: POPULATION_LIMITS.min, max: POPULATION_LIMITS.max };
+  state.popularityFilters = [];
+  state.phoneticFilters = [];
+  state.groupFilters = [];
+  state.sortKey = 'match';
+  state.sortDir = 'desc';
+}
+
+function restoreFromParams(params) {
+  resetFilterState();
+  resetFilterIds();
   if (params.has('gender')) {
     state.genders = new Set(params.get('gender').split(',').filter(Boolean));
   }
@@ -578,18 +602,22 @@ function restoreFromQuery() {
     if (Object.keys(parsedWeights).length) {
       state.weightOverrides = parsedWeights;
       weightPercentBudget = computeAbsoluteWeightBudget(parsedWeights) || weightPercentBudget;
+      persistSharedWeights(parsedWeights, defaultMatchingWeights);
     }
+  }
+}
+
+function restoreFilters() {
+  const storedQuery = readFilterQuery();
+  if (storedQuery) {
+    restoreFromParams(new URLSearchParams(storedQuery));
   }
 }
 
 function updateFavoriteNavHref() {
   const link = document.querySelector('.favorite-nav');
   if (!link) return;
-  const params = new URLSearchParams();
-  const surname = (state.surname || '').trim();
-  if (surname) params.set('surname', surname);
-  const baseHref = 'favorites/';
-  link.href = params.toString() ? `${baseHref}?${params.toString()}` : baseHref;
+  link.href = 'favorites/';
   setAdSlotsEnabled('results', getFilteredCount() > 0);
 }
 
@@ -980,7 +1008,7 @@ function applyFilters(skipFormSync = false) {
   state.matchInfo = { surnameEntry, missingSurname };
   updateSurnameAnalysis(surnameEntry, missingSurname);
   renderResults(restoreResultsScroll);
-  updateUrl();
+  persistFilterState();
 }
 
 function passesGroupFilters(entry) {
@@ -2553,7 +2581,7 @@ function resetDetailAdCounter() {
   detailAds.reset();
 }
 
-function updateUrl() {
+function persistFilterState() {
   const params = new URLSearchParams();
   state.popularityFilters.forEach((filter) => {
     const modeValue = filter.mode === 'exclude' ? 'exclude' : 'include';
@@ -2590,8 +2618,7 @@ function updateUrl() {
     params.set('w', serializeWeightOverrides(state.weightOverrides));
   }
   const query = params.toString();
-  const newUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
-  history.replaceState(null, '', newUrl);
+  writeFilterQuery(query);
   updateFavoriteNavHref();
   setAdSlotsEnabled('results', false);
 }
@@ -2656,19 +2683,28 @@ function bindEvents() {
     if (!btn) return;
     const href = btn.getAttribute('data-filter-href');
     if (!href) return;
-    event.preventDefault();
     const url = new URL(href, window.location.origin);
+    const isSamePage =
+      url.origin === window.location.origin &&
+      (url.pathname === window.location.pathname || url.pathname === '/' || /\/index\.html$/i.test(url.pathname));
+    if (!isSamePage) {
+      window.location.href = url.toString();
+      return;
+    }
+    event.preventDefault();
     const surnameValue = (state.surname || '').trim();
-    if (surnameValue) {
-      url.searchParams.set('surname', surnameValue);
+    const params = new URLSearchParams(url.search);
+    if (surnameValue && !params.has('surname')) {
+      params.set('surname', surnameValue);
     }
-    if (state.genders.size && state.genders.size < 3) {
-      url.searchParams.set('gender', Array.from(state.genders).join(','));
+    if (state.genders.size && state.genders.size < 3 && !params.has('gender')) {
+      params.set('gender', Array.from(state.genders).join(','));
     }
-    url.searchParams.set('openArticles', '1');
-    url.hash = 'results';
+    restoreFromParams(params);
+    syncFormWithState();
+    applyFilters(true);
     sessionStorage.setItem(SCROLL_FLAG_KEY, '1');
-    window.location.href = url.toString();
+    scrollToResultsIfNeeded();
   });
   document.addEventListener('blog-strip-ready', () => {
     if (hasScrolledToResults || sessionStorage.getItem(SCROLL_FLAG_KEY) === '1') {
@@ -2746,7 +2782,7 @@ async function init() {
   buildMetaMaps();
   applySchemaLimits();
   initSelects();
-  restoreFromQuery();
+  restoreFilters();
   updateFavoriteNavHref();
   registerAdSlots('results', ['.ad-inline-top', '.ad-rail']);
   registerAdSlots('affiliate', ['.affiliate-link']);

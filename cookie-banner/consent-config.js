@@ -33,28 +33,6 @@
           gtag('consent', 'update', { analytics_storage: 'denied' });
         },
       },
-      {
-        id: 'advertising',
-        name: 'Mainonta',
-        description:
-          '<p>Nämä evästeet tuovat lisäominaisuuksia ja personointia. Ne voivat olla meidän tai kumppaniemme asettamia.</p>',
-        defaultValue: true,
-        onAccept: function () {
-          gtag('consent', 'update', {
-            ad_storage: 'granted',
-            ad_user_data: 'granted',
-            ad_personalization: 'granted',
-          });
-          dataLayer.push({ event: 'consent_accepted_advertising' });
-        },
-        onReject: function () {
-          gtag('consent', 'update', {
-            ad_storage: 'denied',
-            ad_user_data: 'denied',
-            ad_personalization: 'denied',
-          });
-        },
-      },
     ],
     text: {
       banner: {
@@ -81,10 +59,10 @@
 
   function applyDefaultConsent() {
     gtag('consent', 'default', {
-      ad_storage: 'granted',
+      ad_storage: 'denied',
       analytics_storage: 'granted',
-      ad_personalization: 'granted',
-      ad_user_data: 'granted',
+      ad_personalization: 'denied',
+      ad_user_data: 'denied',
     });
   }
 

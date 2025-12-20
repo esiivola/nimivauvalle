@@ -28,6 +28,7 @@ import {
   weightToPercent
 } from './weight-utils.js';
 import { createCardDetailLoader } from './name-detail-renderer.js';
+import { readFilterQuery, writeFilterQuery } from './state-store.js';
 
 let favorites = new Set();
 let activeNames = new Set();
@@ -53,7 +54,6 @@ let currentMatchWeights = {};
 let weightModal = null;
 let weightEditorInputs = [];
 let weightPercentBudget = 1;
-let backLinkSearch = '';
 const WEIGHT_SUM_TOLERANCE = 0.05;
 const FAVORITES_T = {
   matchLabel: 'Sukunimiosuvuus',
@@ -146,7 +146,6 @@ function renderFavorites() {
   const missingSurname = Boolean(surnameValue && !surnameEntry);
   updateSurnameAnalysis(surnameEntry, missingSurname);
   updateMatchContext(surnameEntry, missingSurname);
-  updateBackLinkHref();
   if (!hasFavorites) {
     count.textContent = 'Ei suosikkeja';
     context.textContent = '';
@@ -356,15 +355,34 @@ function saveChanges() {
   updateSaveVisibility();
   renderFavorites();
 }
+
+function persistSurnameToFilterQuery() {
+  const params = new URLSearchParams(readFilterQuery());
+  const surname = (surnameValue || '').trim();
+  if (surname) {
+    params.set('surname', surname);
+  } else {
+    params.delete('surname');
+  }
+  writeFilterQuery(params.toString());
+}
+
 function decodeActiveNames() {
   const params = new URLSearchParams(window.location.search);
   const shared = decodeFavoritesParam(params.get('f'));
-  const surnameParam = params.get('surname');
+  let surnameParam = params.get('surname');
+  if (!surnameParam) {
+    const storedQuery = readFilterQuery();
+    if (storedQuery) {
+      surnameParam = new URLSearchParams(storedQuery).get('surname');
+    }
+  }
   if (surnameParam) {
     surnameValue = surnameParam.trim();
     const input = document.querySelector('#favorites-surname');
     if (input) input.value = surnameValue;
   }
+  persistSurnameToFilterQuery();
   favorites = loadFavorites(FAVORITES_KEY);
   if (shared.length) {
     activeNames = new Set(shared);
@@ -372,7 +390,6 @@ function decodeActiveNames() {
   } else {
     activeNames = new Set(favorites);
   }
-  updateBackLinkHref();
 }
 
 function shareFavorites() {
@@ -531,7 +548,7 @@ function bindActions() {
     const missing = Boolean(surnameValue && !entry);
     updateSurnameAnalysis(entry, missing);
     updateMatchContext(entry, missing);
-    updateBackLinkHref();
+    persistSurnameToFilterQuery();
     renderFavorites();
   });
   document.querySelector('#favorites-open-weight')?.addEventListener('click', openWeightModal);
@@ -544,7 +561,6 @@ function bindActions() {
 }
 
 async function init() {
-  updateBackLinkFromReferrer();
   decodeActiveNames();
   await loadData();
   const initialSurnameEntry = getSurnameEntry();
@@ -555,7 +571,6 @@ async function init() {
   setAdSlotsEnabled('favorites', false);
   bindActions();
   updateSaveVisibility();
-  updateBackLinkHref();
   renderFavorites();
 }
 
@@ -575,49 +590,3 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
-
-function buildBackLinkHref() {
-  const baseSearch =
-    backLinkSearch && backLinkSearch.length
-      ? backLinkSearch.replace(/^\?/, '')
-      : window.location.search.replace(/^\?/, '');
-  const params = new URLSearchParams(baseSearch);
-  const surname = (surnameValue || '').trim();
-  if (surname) {
-    params.set('surname', surname);
-  } else {
-    params.delete('surname');
-  }
-  const query = params.toString();
-  return query ? `/?${query}` : '/';
-}
-
-function updateBackLinkHref() {
-  const link = document.querySelector('.favorite-nav');
-  if (!link) return;
-  link.href = buildBackLinkHref();
-}
-
-function updateBackLinkFromReferrer() {
-  const link = document.querySelector('.favorite-nav');
-  if (!link) return;
-  if (!document.referrer) {
-    backLinkSearch = '';
-    updateBackLinkHref();
-    return;
-  }
-  try {
-    const refUrl = new URL(document.referrer);
-    const sameOrigin = refUrl.origin === window.location.origin;
-    const isIndex =
-      refUrl.pathname.endsWith('/index.html') ||
-      refUrl.pathname === '/' ||
-      refUrl.pathname === '';
-    if (sameOrigin && isIndex) {
-      backLinkSearch = refUrl.search || '';
-      updateBackLinkHref();
-    }
-  } catch {
-    /* ignore malformed referrer */
-  }
-}

@@ -1,4 +1,5 @@
 import { loadContentBlocks } from './content-loader.js';
+import { extractFilterQuery, hasFilterQuery, writeFilterQuery } from './state-store.js';
 
 const GA_MEASUREMENT_ID = 'G-88PNGZ7WGM';
 const FAVICON_URL = '/favicon.ico';
@@ -173,11 +174,44 @@ function injectSearchLdJson() {
 injectAnalyticsTag();
 ensureFavicon();
 
+let filterLinkBound = false;
+
+function bindFilterQueryLinks() {
+  if (filterLinkBound) return;
+  filterLinkBound = true;
+  document.addEventListener('click', (event) => {
+    if (event.defaultPrevented || event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const link = event.target.closest('a[href]');
+    if (!link) return;
+    if (link.target && link.target !== '_self') return;
+    if (link.hasAttribute('download')) return;
+    const href = link.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+    let url = null;
+    try {
+      url = new URL(href, window.location.origin);
+    } catch {
+      return;
+    }
+    if (url.origin !== window.location.origin) return;
+    const isIndex = url.pathname === '/' || /\/index\.html$/i.test(url.pathname);
+    if (!isIndex) return;
+    const params = url.searchParams;
+    if (!hasFilterQuery(params)) return;
+    const filteredQuery = extractFilterQuery(params);
+    if (!filteredQuery) return;
+    event.preventDefault();
+    writeFilterQuery(filteredQuery);
+    const targetPath = '/';
+    window.location.href = `${targetPath}${url.hash || ''}`;
+  });
+}
+
 export async function initPageChrome(options = {}) {
   const {
     loadContent = true,
     enhanceArticles = false,
-    openArticlesFromQuery = false,
     scrollToHash = false,
     enhanceBlogs = false
   } = options;
@@ -191,13 +225,10 @@ export async function initPageChrome(options = {}) {
 
   injectHeaderNav();
   attachSilktideAttribution();
+  bindFilterQueryLinks();
 
   if (enhanceArticles) {
     initArticleStrips();
-  }
-
-  if (openArticlesFromQuery) {
-    openArticlesPanelFromQuery();
   }
 
   if (scrollToHash) {
@@ -358,21 +389,6 @@ async function initBlogStrip() {
     strip.innerHTML = '<p class="hint">Artikkelilistaa ei voitu ladata.</p>';
     document.dispatchEvent(new CustomEvent('blog-strip-ready'));
   }
-}
-
-export function openArticlesPanelFromQuery() {
-  const panel = document.getElementById('articles-strip-panel');
-  if (!panel) return;
-  const params = new URLSearchParams(window.location.search);
-  if (!params.has('openArticles')) {
-    panel.removeAttribute('open');
-    return;
-  }
-  params.delete('openArticles');
-  const query = params.toString();
-  const newUrl = `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`;
-  history.replaceState(null, '', newUrl);
-  panel.setAttribute('open', '');
 }
 
 export function scrollToHashTarget() {
