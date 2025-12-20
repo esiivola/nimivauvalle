@@ -63,7 +63,7 @@ const translations = {
     ageDistributionNoData: 'Ei ikäjakaumatietoa',
     surnameAnalysisTitle: 'Sukunimen äänneprofiili',
     surnameAnalysisNote: 'Perustuu samoihin vokaali-, sävy- ja rytmiparametreihin kuin sukunimiosuvuus.',
-    surnameAnalysisMissing: 'Sukunimeä ei löytynyt tilastoista. Käytä vertailua harkiten.',
+    surnameAnalysisMissing: 'Sukunimellä on alle 20 nimenkantajaa.',
     surnameUsage: (count, rank) => `Sukunimeä käyttää ${count} henkilöä ja se on ${rank}:s yleisin.`,
     firstNameAnalysisTitle: 'Etunimen äänneprofiili',
     nameDayLabel: 'Nimipäivä',
@@ -1327,8 +1327,11 @@ function sortResults(list) {
     .forEach((option) => {
       periodRanks.set(option.key, option.period);
     });
+  const missingSurname =
+    state.matchInfo?.missingSurname
+    ?? Boolean(state.surname && !surnameMap.get(state.surname.toLowerCase()));
   const activeSortKey =
-    !state.surname && state.sortKey === 'match' ? 'popularity' : state.sortKey;
+    state.sortKey === 'match' && (!state.surname || missingSurname) ? 'popularity' : state.sortKey;
   list.sort((a, b) => {
     const aVal = getSortValue(a);
     const bVal = getSortValue(b);
@@ -2510,7 +2513,7 @@ function updateSurnameAnalysis(entry, missingSurname) {
     missingSurname = !resolvedEntry;
   }
   if (missingSurname || !resolvedEntry) {
-    container.textContent = 'Sukunimeä ei löytynyt.';
+    container.textContent = 'Sukunimellä on alle 20 nimenkantajaa, joten sitä ei voida hyödyntää suosittelussa.';
     return;
   }
   const usageText = getSurnameUsageText(resolvedEntry);

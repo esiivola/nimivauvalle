@@ -457,7 +457,7 @@ function updateSurnameAnalysis(entry, missingSurname) {
     return;
   }
   if (missingSurname || !entry) {
-    container.textContent = 'Sukunimeä ei löytynyt.';
+    container.textContent = 'Sukunimellä on alle 20 nimenkantajaa, joten sitä ei voida hyödyntää suosittelussa.';
     return;
   }
   const usageText = formatSurnameUsage(entry, surnameRankMap, surnameUsageBuilder);
