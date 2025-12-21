@@ -199,6 +199,9 @@
       </section>
 
       <section class="results" id="results" aria-live="polite">
+        <div id="recommendation-hint" class="hint results-hint" hidden>
+          <button class="link-button" type="button" data-action="open-recommendation-hint">Eivätkö suositukset tunnu omilta?</button>
+        </div>
         <div class="results-meta">
           <div class="results-bar">
             <div>
@@ -253,7 +256,7 @@
       </div>
     </template>
 
-    <div id="weight-editor" class="modal" role="dialog" aria-modal="true" aria-labelledby="weight-editor-title" hidden>
+    <div id="weight-editor" class="modal" data-app-modal="true" role="dialog" aria-modal="true" aria-labelledby="weight-editor-title" hidden>
       <div class="modal-backdrop" data-action="dismiss-weight-editor"></div>
       <div class="modal-panel">
         <header class="modal-header">
@@ -285,7 +288,7 @@
     <script src="https://cdn.jsdelivr.net/npm/nouislider@15.7.0/dist/nouislider.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/wnumb@1.2.0/wNumb.min.js"></script>
     <script type="module" src="app.js"></script>
-    <div id="surname-explain-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="surname-explain-title" hidden>
+    <div id="surname-explain-modal" class="modal" data-app-modal="true" role="dialog" aria-modal="true" aria-labelledby="surname-explain-title" hidden>
       <div class="modal-backdrop" data-action="dismiss-surname-explain"></div>
       <div class="modal-panel weight-editor-panel">
         <header class="modal-header">
@@ -299,7 +302,7 @@
       </div>
     </div>
 
-    <div id="story-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="story-title" hidden>
+    <div id="story-modal" class="modal" data-app-modal="true" role="dialog" aria-modal="true" aria-labelledby="story-title" hidden>
       <div class="modal-backdrop" data-action="dismiss-story"></div>
       <div class="modal-panel story-panel">
         <header class="modal-header">
@@ -314,6 +317,23 @@
           Sivusto näyttää kulujen kattamiseksi mainoksia. Jos haluat tukea sivuston kehitystyötä enemmän, voit harkita ostavasi jotain sivuston kestävään ja eettiseen vauva-arkeen liityvien kumppanuuslinkkien kautta.<br>-->
           <p class="hint">Sivuston ylläpitäjä: <a class="ghost link-button" href="mailto:nimivauvalle@gmail.com">nimivauvalle@gmail.com</a></p>
         </p>
+      </div>
+    </div>
+
+    <div id="recommendation-hint-modal" class="modal" data-app-modal="true" role="dialog" aria-modal="true" aria-labelledby="recommendation-hint-title" hidden>
+      <div class="modal-backdrop" data-action="dismiss-recommendation-hint"></div>
+      <div class="modal-panel story-panel">
+        <header class="modal-header">
+          <div>
+            <p class="eyebrow">Vinkki</p>
+            <h2 id="recommendation-hint-title">Eivätkö suositukset tunnu omilta?</h2>
+          </div>
+          <button type="button" class="icon-button" data-action="dismiss-recommendation-hint" aria-label="Sulje">x</button>
+        </header>
+        <p class="story-text">
+          Jos tulokset eivät tunnu omilta, voit suodattaa niitä kätevästi 'Lisätoiveet'-kohdan alta löytyvillä hakuasetuksilla. Helpoiten hakuasetusten monipuoliseen valikoimaan pääset tutustumaan esivalitsemiemme nimilistojen avulla. Löydät nämä nimilistat 'Kaipaatko inspiraatiota?'-kohdan alta sivun ylälaidassa, tai alla olevan painikkeen kautta.<br>
+        </p>
+        <button type="button" class="primary" data-action="go-to-articles-strip">Siirry nimilistoihin</button>
       </div>
     </div>
     <script type="module">

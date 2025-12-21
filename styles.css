@@ -931,6 +931,10 @@ button:not(:disabled):hover {
   margin-bottom: 0.65rem;
 }
 
+.results-hint {
+  margin-bottom: 0.35rem;
+}
+
 .results-meta .results-bar {
   justify-content: flex-start;
   text-align: left;

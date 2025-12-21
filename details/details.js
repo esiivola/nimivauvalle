@@ -2,8 +2,8 @@ import { loadDataset } from '../data-service.js';
 import { createDetailService } from '../detail-service.js';
 import { createCardShell } from '../shared-cards.js';
 import { createCardDetailLoader } from '../name-detail-renderer.js';
-import { buildSurnameData, findSurname } from '../surname-service.js';
-import { loadMatchingModel, computePairScore as computeModelPairScore } from '../matching-model.js';
+import { buildSurnameData, buildSurnameMatchContext, computeWeightedMatchScore } from '../surname-service.js';
+import { loadMatchingModel } from '../matching-model.js';
 import { normalizeWeightMap } from '../weight-utils.js';
 
 const DEFAULT_POPULATION_BASE = 5600000;
@@ -46,9 +46,10 @@ function setStatus(text) {
   status.hidden = !text;
 }
 
-async function maybeAnnotateSurname(entry, surnameEntry, populationBase, schema) {
-  if (!entry || !surnameEntry) return;
-  const surnameCount = Number(surnameEntry.popularity) || 0;
+async function maybeAnnotateSurname(entry, matchContext, populationBase, schema) {
+  const dataEntry = matchContext?.resolution?.dataEntry || null;
+  if (!entry || !matchContext?.resolution?.matchEntry) return;
+  const surnameCount = Number(dataEntry?.popularity) || 0;
   const totalOwners = Number(entry.popularity?.total || 0);
   const base = Number(populationBase) || DEFAULT_POPULATION_BASE;
   const comboValue = surnameCount && totalOwners ? surnameCount * (totalOwners / base) : 0;
@@ -57,8 +58,8 @@ async function maybeAnnotateSurname(entry, surnameEntry, populationBase, schema)
   try {
     const model = await loadMatchingModel();
     const weights = normalizeWeightMap(schema?.matching?.weights || {});
-    const result = computeModelPairScore(entry, surnameEntry, weights, model);
-    entry._match = result?.normalized ?? null;
+    const score = computeWeightedMatchScore(entry, matchContext, weights, model);
+    entry._match = Number.isFinite(score) ? score : null;
   } catch {
     entry._match = null;
   }
@@ -104,11 +105,13 @@ export async function initDetailsPage() {
     const detailService = createDetailService(dataset.schema);
 
     let surnameEntry = null;
+    let matchContext = null;
     if (rawSurname && includeSurnames) {
       const surnameData = buildSurnameData(dataset.surnames || []);
-      surnameEntry = findSurname(surnameData.map, rawSurname);
+      matchContext = buildSurnameMatchContext(dataset.surnames || [], surnameData.map, rawSurname);
+      surnameEntry = matchContext.resolution.matchEntry;
       if (surnameEntry) {
-        await maybeAnnotateSurname(entry, surnameEntry, populationBase, dataset.schema);
+        await maybeAnnotateSurname(entry, matchContext, populationBase, dataset.schema);
       }
     }
 

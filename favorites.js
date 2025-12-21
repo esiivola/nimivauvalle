@@ -13,8 +13,9 @@ import {
 import {
   buildSurnameData,
   annotateMatches as annotateSurnameMatches,
-  findSurname,
-  formatSurnameUsage
+  buildSurnameMatchContext,
+  formatSurnameUsage,
+  resolveSurnameEntry
 } from './surname-service.js';
 import { registerAdSlots, setAdSlotsEnabled } from './ad-service.js';
 import MATCH_WEIGHT_FIELDS from './weight-fields.js';
@@ -34,6 +35,7 @@ let favorites = new Set();
 let activeNames = new Set();
 let nameMap = new Map();
 let surnameMap = new Map();
+let surnameEntries = [];
 let surnameRankMap = new Map();
 let pendingRemovals = new Set();
 let schema = null;
@@ -93,6 +95,7 @@ async function loadData() {
   const surnameData = buildSurnameData(surnames);
   surnameMap = surnameData.map;
   surnameRankMap = surnameData.rankMap;
+  surnameEntries = surnames || [];
   detailService = createDetailService(schema);
   groupMeta = new Map((schema.groupFeatures || []).map((g) => [g.key, g]));
   phoneticMeta = new Map((schema.phoneticFeatures || []).map((f) => [f.key, f]));
@@ -142,10 +145,12 @@ function renderFavorites() {
           }
       )
     : [];
-  const surnameEntry = hasFavorites ? annotateMatches(entries) : getSurnameEntry();
-  const missingSurname = Boolean(surnameValue && !surnameEntry);
-  updateSurnameAnalysis(surnameEntry, missingSurname);
-  updateMatchContext(surnameEntry, missingSurname);
+  const matchContext = getSurnameMatchContext();
+  const surnameResolution = matchContext.resolution;
+  const matchSurnameEntry = hasFavorites ? annotateMatches(entries, matchContext) : surnameResolution.matchEntry;
+  const missingSurname = Boolean(surnameValue && !matchSurnameEntry);
+  updateSurnameAnalysis(surnameResolution);
+  updateMatchContext(matchSurnameEntry, missingSurname);
   if (!hasFavorites) {
     count.textContent = 'Ei suosikkeja';
     context.textContent = '';
@@ -160,7 +165,7 @@ function renderFavorites() {
     const card = createCardShell(fullEntry, {
       filtered: false,
       t: FAVORITES_T,
-      surnameEntry,
+      surnameEntry: matchSurnameEntry,
       isFavorite: () => !pendingRemovals.has(name),
       toggleFavorite: () => {
         if (favBtnRef) togglePendingRemoval(name, card, favBtnRef);
@@ -206,10 +211,6 @@ function togglePendingRemoval(name, card, btn) {
 function updateSaveVisibility() {
   const btn = document.querySelector('#save-favorites');
   btn.hidden = pendingRemovals.size === 0;
-}
-
-function formatNumber(value) {
-  return String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }
 
 function renderWeightList(prefillMap) {
@@ -438,17 +439,16 @@ function buildSortOptions() {
   toggle.textContent = sortDir === 'asc' ? '↑' : '↓';
 }
 
-function getSurnameEntry() {
-  return findSurname(surnameMap, surnameValue);
+function getSurnameMatchContext() {
+  return buildSurnameMatchContext(surnameEntries, surnameMap, surnameValue);
 }
 
-function annotateMatches(entries) {
-  const surnameEntry = getSurnameEntry();
-  annotateSurnameMatches(entries, surnameEntry, currentMatchWeights, matchingModel);
-  return surnameEntry;
+function annotateMatches(entries, matchContext) {
+  annotateSurnameMatches(entries, matchContext, currentMatchWeights, matchingModel);
+  return matchContext?.resolution?.matchEntry || null;
 }
 
-function updateSurnameAnalysis(entry, missingSurname) {
+function updateSurnameAnalysis(resolution = null) {
   const container = document.querySelector('#favorites-surname-analysis');
   if (!container) return;
   const surname = (surnameValue || '').trim();
@@ -456,12 +456,26 @@ function updateSurnameAnalysis(entry, missingSurname) {
     container.textContent = '';
     return;
   }
-  if (missingSurname || !entry) {
-    container.textContent = 'Sukunimellä on alle 20 nimenkantajaa, joten sitä ei voida hyödyntää suosittelussa.';
+  const resolved = resolution || resolveSurnameEntry(surnameMap, surname);
+  const { dataEntry, matchEntry, isProxy } = resolved || {};
+  if (!matchEntry) {
+    container.textContent = '';
     return;
   }
-  const usageText = formatSurnameUsage(entry, surnameRankMap, surnameUsageBuilder);
-  container.textContent = usageText || '';
+  container.innerHTML = '';
+  const span = document.createElement('span');
+  span.className = 'surname-usage';
+  if (isProxy) {
+    span.textContent = 'Sukunimeä käyttää alle 20 henkilöä.';
+  } else {
+    const usageText = formatSurnameUsage(dataEntry, surnameRankMap, surnameUsageBuilder);
+    if (!usageText) {
+      container.textContent = '';
+      return;
+    }
+    span.textContent = usageText;
+  }
+  container.appendChild(span);
 }
 
 function updateMatchContext(entry, missingSurname) {
@@ -544,10 +558,11 @@ function bindActions() {
   const surnameInput = document.querySelector('#favorites-surname');
   surnameInput?.addEventListener('input', (e) => {
     surnameValue = (e.target.value || '').trim();
-    const entry = getSurnameEntry();
-    const missing = Boolean(surnameValue && !entry);
-    updateSurnameAnalysis(entry, missing);
-    updateMatchContext(entry, missing);
+    const matchContext = getSurnameMatchContext();
+    const resolution = matchContext.resolution;
+    const missing = Boolean(surnameValue && !resolution.matchEntry);
+    updateSurnameAnalysis(resolution);
+    updateMatchContext(resolution.matchEntry, missing);
     persistSurnameToFilterQuery();
     renderFavorites();
   });
@@ -563,10 +578,11 @@ function bindActions() {
 async function init() {
   decodeActiveNames();
   await loadData();
-  const initialSurnameEntry = getSurnameEntry();
-  const initialMissing = Boolean(surnameValue && !initialSurnameEntry);
-  updateSurnameAnalysis(initialSurnameEntry, initialMissing);
-  updateMatchContext(initialSurnameEntry, initialMissing);
+  const initialContext = getSurnameMatchContext();
+  const initialResolution = initialContext.resolution;
+  const initialMissing = Boolean(surnameValue && !initialResolution.matchEntry);
+  updateSurnameAnalysis(initialResolution);
+  updateMatchContext(initialResolution.matchEntry, initialMissing);
   registerAdSlots('favorites', ['.ad-rail']);
   setAdSlotsEnabled('favorites', false);
   bindActions();

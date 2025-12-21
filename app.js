@@ -6,7 +6,13 @@ import { FAVORITES_KEY, loadFavorites, saveFavorites } from './favorites-store.j
 import { loadMatchingModel, computePairScore as computeModelPairScore, computeBuckets } from './matching-model.js';
 import { buildExplanation, friendlyBucket } from './explain-utils.js';
 import { registerAdSlots, setAdSlotsEnabled } from './ad-service.js';
-import { buildSurnameData, formatSurnameUsage } from './surname-service.js';
+import {
+  buildSurnameData,
+  buildSurnameMatchContext,
+  computeWeightedMatchScore,
+  resolveSurnameEntry,
+  formatSurnameUsage
+} from './surname-service.js';
 import MATCH_WEIGHT_FIELDS from './weight-fields.js';
 import { createCardDetailLoader } from './name-detail-renderer.js';
 import {
@@ -61,9 +67,6 @@ const translations = {
     ageDistributionTitle: 'Ikäjakauma (arvio)',
     ageDistributionYAxis: 'Henkilöitä (arvio)',
     ageDistributionNoData: 'Ei ikäjakaumatietoa',
-    surnameAnalysisTitle: 'Sukunimen äänneprofiili',
-    surnameAnalysisNote: 'Perustuu samoihin vokaali-, sävy- ja rytmiparametreihin kuin sukunimiosuvuus.',
-    surnameAnalysisMissing: 'Sukunimellä on alle 20 nimenkantajaa.',
     surnameUsage: (count, rank) => `Sukunimeä käyttää ${count} henkilöä ja se on ${rank}:s yleisin.`,
     firstNameAnalysisTitle: 'Etunimen äänneprofiili',
     nameDayLabel: 'Nimipäivä',
@@ -179,6 +182,8 @@ let surnameExplainLink = null;
 let surnameExplainModal = null;
 let hasScrolledToResults = false;
 let pendingResultsScroll = false;
+let resultsScrollRetryTimer = null;
+let resultsScrollCleanupTimer = null;
 const SCROLL_FLAG_KEY = 'scrollToResults';
 
 const $ = (sel) => document.querySelector(sel);
@@ -194,10 +199,13 @@ function getTypedSurname() {
   return (state.surname || '').trim();
 }
 
-function preserveScroll(element) {
+function preserveScroll(element, { edgePadding = 120 } = {}) {
   if (!element || !element.isConnected) return () => {};
   const rect = element.getBoundingClientRect();
   if (element.hidden || (!rect.width && !rect.height)) return () => {};
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  const isNearViewport = rect.bottom >= -edgePadding && rect.top <= viewportHeight + edgePadding;
+  if (!isNearViewport) return () => {};
   const prevTop = rect.top;
   return () => {
     requestAnimationFrame(() => {
@@ -224,6 +232,17 @@ function setPanelOpen(panelId, shouldOpen) {
     panel.setAttribute('open', '');
   } else {
     panel.removeAttribute('open');
+  }
+}
+
+function clearResultsScrollTimers() {
+  if (resultsScrollRetryTimer) {
+    clearTimeout(resultsScrollRetryTimer);
+    resultsScrollRetryTimer = null;
+  }
+  if (resultsScrollCleanupTimer) {
+    clearTimeout(resultsScrollCleanupTimer);
+    resultsScrollCleanupTimer = null;
   }
 }
 
@@ -974,16 +993,20 @@ function applyFilters(skipFormSync = false) {
   }
   const restoreResultsScroll = preserveScroll(document.getElementById('results'));
   state.visibleCount = PAGE_SIZE;
-  const surnameKey = state.surname.toLowerCase();
-  const surnameEntry = surnameKey ? surnameMap.get(surnameKey) : null;
-  const missingSurname = Boolean(state.surname && !surnameEntry);
-  const surnameCount = surnameEntry ? Number(surnameEntry.popularity) || 0 : 0;
+  const matchContext = buildSurnameMatchContext(data.surnames || [], surnameMap, state.surname);
+  const surnameResolution = matchContext.resolution;
+  const { dataEntry: dataSurnameEntry, matchEntry: matchSurnameEntry } = surnameResolution;
+  const missingSurname = Boolean(state.surname && !matchSurnameEntry);
+  const surnameCount = dataSurnameEntry ? Number(dataSurnameEntry.popularity) || 0 : 0;
+  const activeWeights = getActiveWeights();
   const filtered = [];
   filteredOutResults = [];
 
   data.names.forEach((entry) => {
     const reasons = collectFilterFailures(entry);
-    entry._match = surnameEntry ? computeMatchScore(entry, surnameEntry) : null;
+    entry._match = matchSurnameEntry
+      ? computeMatchScore(entry, matchContext, activeWeights)
+      : null;
     const totalOwners = Number(entry.popularity?.total || 0);
     if (surnameCount && totalOwners) {
       const base = populationBaseEstimate || POPULATION_LIMITS.max || 1;
@@ -1005,11 +1028,12 @@ function applyFilters(skipFormSync = false) {
   orderedResults = [...filtered, ...filteredOutResults];
   sortResults(orderedResults);
   currentResults = filtered;
-  state.matchInfo = { surnameEntry, missingSurname };
-  updateSurnameAnalysis(surnameEntry, missingSurname);
+  state.matchInfo = { surnameEntry: matchSurnameEntry, missingSurname };
+  updateSurnameAnalysis(surnameResolution);
   renderResults(restoreResultsScroll);
   persistFilterState();
 }
+
 
 function passesGroupFilters(entry) {
   return getGroupFilterReasons(entry).length === 0;
@@ -1552,9 +1576,10 @@ function evaluateMatchComponents(first, last) {
   };
 }
 
-function computeMatchScore(first, last) {
-  const result = evaluateMatchComponents(first, last);
-  return result.normalized;
+function computeMatchScore(first, matchContext, weights) {
+  const score = computeWeightedMatchScore(first, matchContext, weights, matchingModel);
+  if (!Number.isFinite(score)) return null;
+  return Math.round(score * 1000) / 1000;
 }
 
 function describeLetters(group) {
@@ -1720,6 +1745,11 @@ function isWeightEditorOpen() {
   return Boolean(weightEditorControls && weightEditorControls.modal && !weightEditorControls.modal.hidden);
 }
 
+function updateModalOpenState() {
+  const anyOpen = Boolean(document.querySelector('.modal[data-app-modal="true"]:not([hidden])'));
+  document.body.classList.toggle('modal-open', anyOpen);
+}
+
 function openWeightEditor(prefillMap) {
   if (!weightEditorControls) return;
   renderWeightEditorRows(prefillMap);
@@ -1731,7 +1761,7 @@ function openWeightEditor(prefillMap) {
 function closeWeightEditor() {
   if (!weightEditorControls) return;
   weightEditorControls.modal.hidden = true;
-  document.body.classList.remove('modal-open');
+  updateModalOpenState();
   weightEditorInputs = [];
 }
 
@@ -1746,9 +1776,21 @@ function closeStoryModal() {
   const modal = $('#story-modal');
   if (!modal) return;
   modal.hidden = true;
-  if (!isWeightEditorOpen()) {
-    document.body.classList.remove('modal-open');
-  }
+  updateModalOpenState();
+}
+
+function openRecommendationHintModal() {
+  const modal = $('#recommendation-hint-modal');
+  if (!modal) return;
+  modal.hidden = false;
+  document.body.classList.add('modal-open');
+}
+
+function closeRecommendationHintModal() {
+  const modal = $('#recommendation-hint-modal');
+  if (!modal) return;
+  modal.hidden = true;
+  updateModalOpenState();
 }
 
 function renderWeightEditorRows(prefillValues, sourceWeights) {
@@ -1757,7 +1799,14 @@ function renderWeightEditorRows(prefillValues, sourceWeights) {
   const localeLabels = translations.fi?.weightEditor;
   const surnameEntry = state.matchInfo?.surnameEntry;
   const typedSurname = getTypedSurname();
-  const traitEntries = buildSurnameTraitSentences(surnameEntry, 'stats', 'surname', typedSurname);
+  const resolvedSurname =
+    !surnameEntry && typedSurname ? resolveSurnameEntry(surnameMap, typedSurname) : null;
+  const traitEntries = buildSurnameTraitSentences(
+    surnameEntry || resolvedSurname?.matchEntry,
+    'stats',
+    'surname',
+    typedSurname
+  );
   const traitMap = new Map(traitEntries.map((item) => [item.key, item.text]));
   weightEditorControls.list.innerHTML = '';
   weightEditorInputs = [];
@@ -1935,12 +1984,20 @@ function syncWeightEditorTexts() {
   }
 }
 
+function updateRecommendationHintVisibility(chips) {
+  const hint = $('#recommendation-hint');
+  if (!hint) return;
+  const hasFilters = Array.isArray(chips) && chips.length > 0;
+  hint.hidden = hasFilters;
+}
+
 function renderActiveFilters() {
+  const chips = getActiveFilterChips();
+  updateRecommendationHintVisibility(chips);
   const container = $('#active-filters');
   if (!container) return;
   const restore = preserveScroll(container);
   container.innerHTML = '';
-  const chips = getActiveFilterChips();
   if (!chips.length) {
     container.hidden = true;
     restore();
@@ -2499,7 +2556,15 @@ function getFeatureDescriptionByMeta(meta) {
   return meta.description || '';
 }
 
-function updateSurnameAnalysis(entry, missingSurname) {
+function appendSurnameAnalysisLine(container, text, className) {
+  if (!container || !text) return;
+  const span = document.createElement('span');
+  if (className) span.className = className;
+  span.textContent = text;
+  container.appendChild(span);
+}
+
+function updateSurnameAnalysis(resolution = null) {
   const container = $('#surname-analysis');
   if (!container) return;
   const surname = state.surname.trim();
@@ -2507,27 +2572,25 @@ function updateSurnameAnalysis(entry, missingSurname) {
     container.textContent = '';
     return;
   }
-  let resolvedEntry = entry;
-  if (!resolvedEntry && surnameMap.size) {
-    resolvedEntry = surnameMap.get(surname.toLowerCase()) || null;
-    missingSurname = !resolvedEntry;
-  }
-  if (missingSurname || !resolvedEntry) {
-    container.textContent = 'Sukunimellä on alle 20 nimenkantajaa, joten sitä ei voida hyödyntää suosittelussa.';
+  const resolved = resolution || resolveSurnameEntry(surnameMap, surname);
+  const { dataEntry, matchEntry, isProxy } = resolved || {};
+  if (!matchEntry) {
+    container.textContent = '';
     return;
   }
-  const usageText = getSurnameUsageText(resolvedEntry);
-  container.innerHTML = usageText
-    ? `${usageText}`
-    : 'Sukunimen käyttöä ei löytynyt.';
+  container.innerHTML = '';
+  if (isProxy) {
+    appendSurnameAnalysisLine(container, 'Sukunimeä käyttää alle 20 henkilöä.', 'surname-usage');
+    return;
+  }
+  const usageText = getSurnameUsageText(dataEntry);
+  if (!usageText) {
+    container.textContent = '';
+    return;
+  }
+  appendSurnameAnalysisLine(container, usageText, 'surname-usage');
   container.title = '';
-  renderSurnameExplainLink(resolvedEntry);
-}
-
-function buildSurnameAnalysis(entry) {
-  const typedSurname = getTypedSurname();
-  const sentences = buildSurnameTraitSentences(entry, 'analysis', 'surname', typedSurname);
-  return sentences.map((item) => item.text).join(' ');
+  renderSurnameExplainLink(dataEntry);
 }
 
 function formatComponentBreakdown(componentScores) {
@@ -2636,9 +2699,8 @@ function bindEvents() {
     surnameInput.addEventListener('input', () => {
       const currentValue = surnameInput.value.trim();
       state.surname = currentValue;
-      const entry = currentValue ? surnameMap.get(currentValue.toLowerCase()) : null;
-      const missing = Boolean(currentValue && !entry);
-      updateSurnameAnalysis(entry, missing);
+      const resolution = resolveSurnameEntry(surnameMap, currentValue);
+      updateSurnameAnalysis(resolution);
        updateFavoriteNavHref();
       clearTimeout(surnameInputTimer);
       surnameInputTimer = setTimeout(() => {
@@ -2732,9 +2794,22 @@ function bindEvents() {
   document.querySelectorAll('[data-action="dismiss-story"]').forEach((el) => {
     el.addEventListener('click', closeStoryModal);
   });
+  document.querySelectorAll('[data-action="open-recommendation-hint"]').forEach((el) => {
+    el.addEventListener('click', openRecommendationHintModal);
+  });
+  document.querySelectorAll('[data-action="dismiss-recommendation-hint"]').forEach((el) => {
+    el.addEventListener('click', closeRecommendationHintModal);
+  });
+  document.querySelectorAll('[data-action="go-to-articles-strip"]').forEach((el) => {
+    el.addEventListener('click', () => {
+      closeRecommendationHintModal();
+      scrollToArticlesStrip();
+    });
+  });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
       closeStoryModal();
+      closeRecommendationHintModal();
       if (surnameExplainModal && !surnameExplainModal.hidden) {
         closeSurnameExplain();
       }
@@ -2752,10 +2827,27 @@ function bindEvents() {
 function closeSurnameExplain() {
   if (!surnameExplainModal) return;
   surnameExplainModal.hidden = true;
-  document.body.classList.remove('modal-open');
+  updateModalOpenState();
+}
+
+function scrollToArticlesStrip() {
+  clearResultsScrollTimers();
+  pendingResultsScroll = false;
+  sessionStorage.removeItem(SCROLL_FLAG_KEY);
+  const panel = document.getElementById('articles-strip-panel');
+  if (panel) {
+    panel.open = true;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  const fallback = document.querySelector('[data-include="content/articles-strip.html"]');
+  if (fallback) {
+    fallback.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 function scrollToResultsIfNeeded() {
+  clearResultsScrollTimers();
   const shouldScroll =
     window.location.hash === '#results' || sessionStorage.getItem(SCROLL_FLAG_KEY) === '1' || pendingResultsScroll;
   if (!shouldScroll) return;
@@ -2771,10 +2863,11 @@ function scrollToResultsIfNeeded() {
   };
   requestAnimationFrame(() => {
     scrollToTarget();
-    setTimeout(scrollToTarget, 220);
+    resultsScrollRetryTimer = setTimeout(scrollToTarget, 220);
   });
-  setTimeout(() => {
+  resultsScrollCleanupTimer = setTimeout(() => {
     pendingResultsScroll = false;
+    clearResultsScrollTimers();
   }, 500);
 }
 
