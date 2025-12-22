@@ -243,13 +243,22 @@ export async function initPageChrome(options = {}) {
 export function injectHeaderNav() {
   const header = document.querySelector('.page-header');
   if (!header) return;
-  const navLabel = document.body.dataset.navLabel || 'Takaisin hakuun';
+  const navLabel = document.body.dataset.navLabel || 'Etusivulle';
   const navHref = document.body.dataset.navHref || '/';
+  let nav = header.querySelector('.page-nav');
+  if (!nav) {
+    nav = document.createElement('nav');
+    nav.className = 'page-nav';
+    nav.setAttribute('aria-label', 'Sivunavigaatio');
+    header.prepend(nav);
+  }
   let navLink = header.querySelector('.favorite-nav');
   if (!navLink) {
     navLink = document.createElement('a');
-    navLink.className = 'ghost favorite-nav';
-    header.prepend(navLink);
+    navLink.className = 'favorite-nav';
+  }
+  if (!nav.contains(navLink)) {
+    nav.appendChild(navLink);
   }
   navLink.textContent = navLabel;
   navLink.href = navHref;

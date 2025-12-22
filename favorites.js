@@ -180,7 +180,10 @@ function renderFavorites() {
       if (favBtnRef) {
         favBtnRef.classList.remove('active');
         favBtnRef.textContent = '☆';
-        favBtnRef.title = 'Palauta suosikiksi';
+        const label = 'Palauta suosikiksi';
+        favBtnRef.title = label;
+        favBtnRef.setAttribute('aria-label', label);
+        favBtnRef.setAttribute('aria-pressed', 'false');
       }
     }
     list.appendChild(card);
@@ -197,13 +200,19 @@ function togglePendingRemoval(name, card, btn) {
     card.classList.remove('marked-remove');
     btn.classList.add('active');
     btn.textContent = '★';
-    btn.title = 'Poista suosikeista';
+    const label = 'Poista suosikeista';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-pressed', 'true');
   } else {
     pendingRemovals.add(name);
     card.classList.add('marked-remove');
     btn.classList.remove('active');
     btn.textContent = '☆';
-    btn.title = 'Palauta suosikiksi';
+    const label = 'Palauta suosikiksi';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-pressed', 'false');
   }
   updateSaveVisibility();
 }
@@ -411,6 +420,16 @@ function shareFavorites() {
   document.execCommand('copy');
 }
 
+function updateSortToggleButton(toggle) {
+  if (!toggle) return;
+  const isAsc = sortDir === 'asc';
+  const label = isAsc ? 'Järjestys: nouseva' : 'Järjestys: laskeva';
+  toggle.textContent = isAsc ? '↑' : '↓';
+  toggle.setAttribute('aria-label', label);
+  toggle.setAttribute('aria-pressed', isAsc ? 'false' : 'true');
+  toggle.title = label;
+}
+
 function buildSortOptions() {
   const select = document.querySelector('#favorites-sort-key');
   const toggle = document.querySelector('#favorites-toggle-sort');
@@ -433,10 +452,10 @@ function buildSortOptions() {
   });
   toggle.addEventListener('click', () => {
     sortDir = sortDir === 'asc' ? 'desc' : 'asc';
-    toggle.textContent = sortDir === 'asc' ? '↑' : '↓';
+    updateSortToggleButton(toggle);
     renderFavorites();
   });
-  toggle.textContent = sortDir === 'asc' ? '↑' : '↓';
+  updateSortToggleButton(toggle);
 }
 
 function getSurnameMatchContext() {

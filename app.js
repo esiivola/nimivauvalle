@@ -680,6 +680,17 @@ function updatePopulationInputs() {
   updatePopulationLabel();
 }
 
+function updateSortDirToggle() {
+  const toggle = $('#toggle-sort');
+  if (!toggle) return;
+  const isAsc = state.sortDir === 'asc';
+  const label = isAsc ? 'Järjestys: nouseva' : 'Järjestys: laskeva';
+  toggle.textContent = isAsc ? '↑' : '↓';
+  toggle.setAttribute('aria-label', label);
+  toggle.setAttribute('aria-pressed', isAsc ? 'false' : 'true');
+  toggle.title = label;
+}
+
 function attachPopulationInputEvents() {
   const minInput = $('#population-min');
   const maxInput = $('#population-max');
@@ -718,7 +729,7 @@ function syncFormWithState() {
   lettersRangeControl?.setValues(state.letterRange.min, state.letterRange.max);
   updatePopulationInputs();
   $('#sort-key').value = state.sortKey;
-  $('#toggle-sort').textContent = state.sortDir === 'asc' ? '↑' : '↓';
+  updateSortDirToggle();
   updateSortOptionTooltips();
   renderFeatureFilters();
   renderPopularityFilters();
@@ -2734,7 +2745,7 @@ function bindEvents() {
   });
   $('#toggle-sort').addEventListener('click', () => {
     state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
-    $('#toggle-sort').textContent = state.sortDir === 'asc' ? '↑' : '↓';
+    updateSortDirToggle();
     applyFilters();
   });
   const addPhoneticBtn = $('[data-action="add-phonetic"]');

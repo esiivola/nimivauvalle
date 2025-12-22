@@ -87,7 +87,10 @@ export function createCardShell(entry, options) {
       const fav = typeof isFavorite === 'function' ? isFavorite(entry) : false;
       favBtn.textContent = fav ? '★' : '☆';
       favBtn.classList.toggle('active', fav);
-      favBtn.title = fav ? 'Poista suosikeista' : 'Lisää suosikkeihin';
+      const label = fav ? 'Poista suosikeista' : 'Lisää suosikkeihin';
+      favBtn.title = label;
+      favBtn.setAttribute('aria-label', label);
+      favBtn.setAttribute('aria-pressed', fav ? 'true' : 'false');
     };
     setState();
     favBtn.addEventListener('click', (event) => {
