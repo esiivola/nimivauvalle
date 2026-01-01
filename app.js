@@ -461,7 +461,7 @@ function showFavoriteTip(anchor) {
   const text = document.createElement('span');
   text.className = 'favorite-tip-text';
   text.textContent =
-    'Tähti-ikoni lisää nimen omiin suosikkeihin. Näet kaikki suosikkisi ja voit jakaa suosikkilistasi sivuston oikean ylälaidan linkistä.';
+    'Tähti-ikoni lisää nimen omiin suosikkeihin. Näet kaikki suosikkisi ja voit luoda jaettavan linkin suosikkilistallesi sivuston oikean ylälaidan linkistä.';
 
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
