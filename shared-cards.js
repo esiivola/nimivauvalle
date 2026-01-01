@@ -95,7 +95,7 @@ export function createCardShell(entry, options) {
     setState();
     favBtn.addEventListener('click', (event) => {
       event.stopPropagation();
-      toggleFavorite(entry);
+      toggleFavorite(entry, event);
       setState();
       favBtn.blur();
       card.querySelector('summary')?.blur();

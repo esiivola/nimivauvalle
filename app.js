@@ -439,15 +439,113 @@ function isFavoriteName(name) {
   return favorites.has(name);
 }
 
-function toggleFavoriteName(entry) {
+
+
+
+
+
+
+function showFavoriteTip(anchor) {
+  const anchorEl = anchor instanceof Element ? anchor : document.querySelector('.favorite-nav');
+  const host = document.body;
+  if (!host) return;
+  if (anchorEl && anchorEl.closest('.favorite-tip')) return;
+  if (document.querySelector('.favorite-tip')) return;
+
+  const tip = document.createElement('div');
+  tip.className = 'favorite-tip';
+  tip.setAttribute('role', 'status');
+  tip.setAttribute('aria-live', 'polite');
+  tip.setAttribute('aria-atomic', 'true');
+
+  const text = document.createElement('span');
+  text.className = 'favorite-tip-text';
+  text.textContent =
+    'Tähti-ikoni lisää nimen omiin suosikkeihin. Näet kaikki suosikkisi ja voit jakaa suosikkilistasi sivuston oikean ylälaidan linkistä.';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'favorite-tip-close';
+  closeBtn.setAttribute('aria-label', 'Sulje');
+  closeBtn.textContent = '×';
+
+  tip.appendChild(text);
+  tip.appendChild(closeBtn);
+  tip.style.visibility = 'hidden';
+  host.appendChild(tip);
+
+  const positionTip = () => {
+    const margin = 12;
+    const anchorRect = anchorEl ? anchorEl.getBoundingClientRect() : null;
+    const tipRect = tip.getBoundingClientRect();
+    if (!anchorRect) {
+      tip.style.left = '50%';
+      tip.style.top = `${margin}px`;
+      tip.style.transform = 'translateX(-50%)';
+      tip.style.setProperty('--tip-arrow-left', '50%');
+      return;
+    }
+    let left = anchorRect.left;
+    left = Math.max(margin, Math.min(left, window.innerWidth - tipRect.width - margin));
+    let top = anchorRect.bottom + 10;
+    if (top + tipRect.height > window.innerHeight - margin) {
+      top = anchorRect.top - tipRect.height - 10;
+    }
+    top = Math.max(margin, Math.min(top, window.innerHeight - tipRect.height - margin));
+    const arrowLeft = Math.min(
+      Math.max(anchorRect.left + anchorRect.width / 2 - left, 12),
+      tipRect.width - 12
+    );
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+    tip.style.transform = '';
+    tip.style.setProperty('--tip-arrow-left', `${arrowLeft}px`);
+  };
+
+  positionTip();
+  tip.style.visibility = 'visible';
+
+  const closeTip = () => {
+    tip.remove();
+    window.removeEventListener('resize', positionTip);
+    window.removeEventListener('scroll', positionTip, true);
+    document.removeEventListener('click', handleOutsideClick, true);
+  };
+
+  const handleOutsideClick = (event) => {
+    if (!tip.contains(event.target)) {
+      closeTip();
+    }
+  };
+
+  closeBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    closeTip();
+  });
+
+  window.addEventListener('resize', positionTip);
+  window.addEventListener('scroll', positionTip, true);
+  setTimeout(() => {
+    document.addEventListener('click', handleOutsideClick, true);
+  }, 0);
+}
+
+
+
+function toggleFavoriteName(entry, event) {
   if (!entry?.name) return;
   const key = entry.name;
-  if (favorites.has(key)) {
+  const wasFavorite = favorites.has(key);
+  if (wasFavorite) {
     favorites.delete(key);
   } else {
     favorites.add(key);
   }
   saveFavorites(favorites, FAVORITES_KEY);
+  if (!wasFavorite && favorites.size === 1) {
+    const anchor = event?.currentTarget instanceof Element ? event.currentTarget : null;
+    showFavoriteTip(anchor);
+  }
 }
 
 function normalizeRangeValues(minValue, maxValue, limits) {

@@ -90,6 +90,7 @@ section[data-include="content/blog-strip.html"] {
   grid-column: 2;
   justify-self: end;
   align-self: start;
+  position: relative;
 }
 
 @media (max-width: 720px) {
@@ -299,6 +300,57 @@ a.article-cta.inline:hover {
 }
 
 .favorite-nav:hover {
+  color: var(--text);
+}
+
+.favorite-tip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  max-width: min(90vw, 360px);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  box-shadow: 0 14px 36px rgba(26, 37, 60, 0.16);
+  padding: 0.6rem 0.7rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  color: var(--text);
+  font-size: 0.9rem;
+  z-index: 90;
+}
+
+
+.favorite-tip::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: var(--tip-arrow-left, 1.25rem);
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  transform: rotate(45deg);
+}
+
+
+.favorite-tip-text {
+  line-height: 1.4;
+}
+
+.favorite-tip-close {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.1rem;
+  cursor: pointer;
+}
+
+.favorite-tip-close:hover {
   color: var(--text);
 }
 
@@ -903,6 +955,18 @@ button.link-button:focus-visible {
   }
 }
 
+button.link-button.hint-toggle,
+button.link-button.hint-toggle:hover {
+  background: #fff;
+  border-color: var(--border);
+}
+
+button.link-button.hint-toggle[aria-expanded="true"],
+button.link-button.hint-toggle[aria-expanded="true"]:hover {
+  background: var(--accent-muted);
+  border-color: rgba(255, 125, 110, 0.45);
+}
+
 button:not(:disabled):hover {
   transform: translateY(-1px);
 }
@@ -1379,9 +1443,14 @@ button:not(:disabled):hover {
 
 .share-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
   align-self: flex-end;
+}
+
+#share-favorites {
+  background: #fff;
 }
 
 .favorites-toolbar-actions {
@@ -1419,9 +1488,31 @@ button:not(:disabled):hover {
   border-bottom: 1px solid var(--border);
 }
 
-.name-card summary::-webkit-details-marker {
+.name-card summary::-webkit-details-marker,
+.name-card summary::marker {
   display: none;
+  content: '';
 }
+
+.name-card summary::before {
+  content: '▸';
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: 20px;
+  height: 20px;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 1.25rem;
+  line-height: 1;
+  background: transparent;
+}
+
+.name-card[open] summary::before {
+  content: '▾';
+}
+
 
 .name-card .name-title {
   font-size: 1.2rem;

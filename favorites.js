@@ -132,6 +132,10 @@ function renderFavorites() {
   setAdSlotsEnabled('favorites', activeNames.size > 0);
   list.innerHTML = '';
   const hasFavorites = activeNames.size > 0;
+  if (!hasFavorites) {
+    const shareInput = document.querySelector('#share-url');
+    if (shareInput) shareInput.value = '';
+  }
   const entries = hasFavorites
     ? Array.from(activeNames).map(
         (name) =>
@@ -402,9 +406,15 @@ function decodeActiveNames() {
   }
 }
 
+
 function shareFavorites() {
+  const input = document.querySelector('#share-url');
+  if (!input) return;
   const names = Array.from(activeNames);
-  if (!names.length) return;
+  if (!names.length) {
+    input.value = '';
+    return;
+  }
   const encoded = encodeFavorites(names);
   const surnameInput = document.querySelector('#favorites-surname');
   const surname = (surnameInput?.value || '').trim();
@@ -414,7 +424,6 @@ function shareFavorites() {
     params.set('surname', surname);
   }
   const url = `${window.location.origin}${window.location.pathname}?${params.toString()}`;
-  const input = document.querySelector('#share-url');
   input.value = url;
   input.select();
   document.execCommand('copy');
