@@ -85,7 +85,7 @@ export function createCardShell(entry, options) {
     favBtn.className = 'favorite-btn';
     const setState = () => {
       const fav = typeof isFavorite === 'function' ? isFavorite(entry) : false;
-      favBtn.textContent = fav ? '★' : '☆';
+      favBtn.textContent = '♥';
       favBtn.classList.toggle('active', fav);
       const label = fav ? 'Poista suosikeista' : 'Lisää suosikkeihin';
       favBtn.title = label;

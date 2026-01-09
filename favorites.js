@@ -183,7 +183,7 @@ function renderFavorites() {
       card.classList.add('marked-remove');
       if (favBtnRef) {
         favBtnRef.classList.remove('active');
-        favBtnRef.textContent = '☆';
+        favBtnRef.textContent = '♥';
         const label = 'Palauta suosikiksi';
         favBtnRef.title = label;
         favBtnRef.setAttribute('aria-label', label);
@@ -194,7 +194,7 @@ function renderFavorites() {
   });
   count.textContent = `${activeNames.size} suosikkia`;
   context.textContent = pendingRemovals.size
-    ? 'Poista punaiseksi muuttuneet tähdet tallentamalla muutokset.'
+    ? 'Poista punaiseksi muuttuneet sydämet tallentamalla muutokset.'
     : '';
 }
 
@@ -203,7 +203,7 @@ function togglePendingRemoval(name, card, btn) {
     pendingRemovals.delete(name);
     card.classList.remove('marked-remove');
     btn.classList.add('active');
-    btn.textContent = '★';
+    btn.textContent = '♥';
     const label = 'Poista suosikeista';
     btn.title = label;
     btn.setAttribute('aria-label', label);
@@ -212,7 +212,7 @@ function togglePendingRemoval(name, card, btn) {
     pendingRemovals.add(name);
     card.classList.add('marked-remove');
     btn.classList.remove('active');
-    btn.textContent = '☆';
+    btn.textContent = '♥';
     const label = 'Palauta suosikiksi';
     btn.title = label;
     btn.setAttribute('aria-label', label);
