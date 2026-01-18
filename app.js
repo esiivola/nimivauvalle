@@ -28,6 +28,14 @@ import {
   weightToPercent
 } from './weight-utils.js';
 import {
+  DEFAULT_GENDERS,
+  ensureGenderFilter,
+  getGenderInputs,
+  getSelectedGenders,
+  normalizeGenderSelection,
+  setSelectedGenders
+} from './gender-filter.js';
+import {
   readFilterQuery,
   writeFilterQuery
 } from './state-store.js';
@@ -117,7 +125,7 @@ const translations = {
 };
 
 const state = {
-  genders: new Set(['female', 'male', 'unisex']),
+  genders: new Set(DEFAULT_GENDERS),
   surname: '',
   includeLettersInput: '',
   excludeLettersInput: '',
@@ -637,7 +645,7 @@ function resetFilterIds() {
 }
 
 function resetFilterState() {
-  state.genders = new Set(['female', 'male', 'unisex']);
+  state.genders = new Set(DEFAULT_GENDERS);
   state.surname = '';
   state.includeLettersInput = '';
   state.excludeLettersInput = '';
@@ -778,6 +786,12 @@ function updatePopulationInputs() {
   updatePopulationLabel();
 }
 
+function mountGenderFilter() {
+  const container = document.querySelector('#gender-filter');
+  if (!container) return;
+  ensureGenderFilter(container, { selected: state.genders });
+}
+
 function updateSortDirToggle() {
   const toggle = $('#toggle-sort');
   if (!toggle) return;
@@ -818,9 +832,7 @@ function attachPopulationInputEvents() {
 }
 
 function syncFormWithState() {
-  document.querySelectorAll('input[name="gender"]').forEach((checkbox) => {
-    checkbox.checked = state.genders.has(checkbox.value);
-  });
+  setSelectedGenders(document, state.genders);
   $('#surname-input').value = state.surname;
   $('#letters-include').value = state.includeLettersInput;
   $('#letters-exclude').value = state.excludeLettersInput;
@@ -1073,11 +1085,7 @@ function addGroupFilter() {
 }
 
 function updateStateFromForm() {
-  const selectedGenders = new Set();
-  document.querySelectorAll('input[name="gender"]:checked').forEach((checkbox) => {
-    selectedGenders.add(checkbox.value);
-  });
-  state.genders = selectedGenders.size ? selectedGenders : new Set(['female', 'male', 'unisex']);
+  state.genders = normalizeGenderSelection(getSelectedGenders(document));
   state.surname = $('#surname-input').value.trim();
   state.includeLettersInput = normalizeLetterFilter($('#letters-include').value);
   state.excludeLettersInput = normalizeLetterFilter($('#letters-exclude').value);
@@ -2886,7 +2894,7 @@ function bindEvents() {
       scrollToResultsIfNeeded();
     }
   });
-  document.querySelectorAll('input[name="gender"]').forEach((checkbox) => {
+  getGenderInputs(document).forEach((checkbox) => {
     checkbox.addEventListener('change', () => applyFilters());
   });
   const loadMoreBtn = $('#load-more');
@@ -2981,6 +2989,7 @@ function scrollToResultsIfNeeded() {
 }
 
 async function init() {
+  mountGenderFilter();
   data = await loadData();
   favorites = loadFavorites(FAVORITES_KEY);
   prepareMatchingWeights();

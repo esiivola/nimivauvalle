@@ -805,6 +805,10 @@ fieldset {
   margin: 0;
 }
 
+.gender-field label.is-disabled {
+  opacity: 0.55;
+}
+
 .gender-field input[type="checkbox"] {
   width: auto;
   accent-color: var(--accent);
@@ -1316,6 +1320,7 @@ button:not(:disabled):hover {
 }
 
 .marked-remove .favorite-btn {
+  --favorite-outline: var(--muted);
   color: var(--muted);
 }
 
@@ -1363,13 +1368,21 @@ button:not(:disabled):hover {
 }
 
 .favorite-btn {
+  --favorite-outline: #d1c7ff;
   margin-left: auto;
   border: none;
   background: none;
   font-size: 1.2rem;
   line-height: 1;
   cursor: pointer;
-  color: #d1c7ff;
+  color: var(--favorite-outline);
+}
+
+@supports (-webkit-text-stroke: 1px #000) {
+  .favorite-btn:not(.active) {
+    color: transparent;
+    -webkit-text-stroke: 1.3px var(--favorite-outline);
+  }
 }
 
 .favorite-btn.active {
@@ -1399,7 +1412,7 @@ button:not(:disabled):hover {
   grid-template-columns: 1fr auto;
   align-items: flex-start;
   gap: 0.75rem;
-  margin: 0 0 0.5rem 0;
+  margin: 0 0 0.25rem 0;
 }
 
 .results-toolbar .surname-field {
@@ -1435,6 +1448,10 @@ button:not(:disabled):hover {
   gap: 0.75rem;
   align-items: center;
   margin-bottom: 0.75rem;
+}
+
+.favorites-options[hidden] {
+  display: none;
 }
 
 .favorites-options .results-ordering {

@@ -30,6 +30,12 @@ import {
 } from './weight-utils.js';
 import { createCardDetailLoader } from './name-detail-renderer.js';
 import { readFilterQuery, writeFilterQuery } from './state-store.js';
+import {
+  DEFAULT_GENDERS,
+  createGenderFieldset,
+  getSelectedGenders,
+  normalizeGenderSelection
+} from './gender-filter.js';
 
 let favorites = new Set();
 let activeNames = new Set();
@@ -57,6 +63,9 @@ let weightModal = null;
 let weightEditorInputs = [];
 let weightPercentBudget = 1;
 const WEIGHT_SUM_TOLERANCE = 0.05;
+let genderFilterContainer = null;
+let selectedGenders = new Set(DEFAULT_GENDERS);
+let showGenderFilter = false;
 const FAVORITES_T = {
   matchLabel: 'Sukunimiosuvuus',
   comboTag: (count) => `Täyskaimoja: ~${count}`,
@@ -125,6 +134,48 @@ async function loadData() {
   buildSortOptions();
 }
 
+function initGenderFilter() {
+  const container = document.querySelector('#favorites-gender-filter');
+  if (!container) return;
+  container.innerHTML = '';
+  const fieldset = createGenderFieldset({ selected: selectedGenders });
+  fieldset.addEventListener('change', () => {
+    selectedGenders = normalizeGenderSelection(getSelectedGenders(fieldset));
+    renderFavorites();
+  });
+  container.appendChild(fieldset);
+  genderFilterContainer = container;
+}
+
+function getGenderCategories(entries) {
+  const categories = new Set();
+  entries.forEach((entry) => {
+    const gender = String(entry?.gender || '').toLowerCase();
+    if (DEFAULT_GENDERS.includes(gender)) {
+      categories.add(gender);
+    }
+  });
+  return categories;
+}
+
+function updateGenderFilter(entries) {
+  if (!genderFilterContainer) {
+    showGenderFilter = false;
+    return;
+  }
+  const categories = getGenderCategories(entries);
+  showGenderFilter = categories.size > 1;
+  genderFilterContainer.hidden = !showGenderFilter;
+  genderFilterContainer.setAttribute('aria-hidden', showGenderFilter ? 'false' : 'true');
+  selectedGenders = normalizeGenderSelection(selectedGenders);
+}
+
+function matchesGenderFilter(entry) {
+  const gender = String(entry?.gender || '').toLowerCase();
+  if (!gender || gender === 'unknown') return true;
+  return selectedGenders.has(gender);
+}
+
 function renderFavorites() {
   const list = document.querySelector('#favorites-list');
   const count = document.querySelector('#favorites-count');
@@ -149,9 +200,11 @@ function renderFavorites() {
           }
       )
     : [];
+  updateGenderFilter(entries);
+  const visibleEntries = entries.filter(matchesGenderFilter);
   const matchContext = getSurnameMatchContext();
   const surnameResolution = matchContext.resolution;
-  const matchSurnameEntry = hasFavorites ? annotateMatches(entries, matchContext) : surnameResolution.matchEntry;
+  const matchSurnameEntry = hasFavorites ? annotateMatches(visibleEntries, matchContext) : surnameResolution.matchEntry;
   const missingSurname = Boolean(surnameValue && !matchSurnameEntry);
   updateSurnameAnalysis(surnameResolution);
   updateMatchContext(matchSurnameEntry, missingSurname);
@@ -161,7 +214,7 @@ function renderFavorites() {
     list.innerHTML = '<p class="hint">Lisää nimiä suosikeiksi hakusivulta.</p>';
     return;
   }
-  const sorted = sortEntries(entries);
+  const sorted = sortEntries(visibleEntries);
   sorted.forEach((entry) => {
     const name = entry.name;
     const fullEntry = nameMap.get(name) || entry;
@@ -192,7 +245,11 @@ function renderFavorites() {
     }
     list.appendChild(card);
   });
-  count.textContent = `${activeNames.size} suosikkia`;
+  const totalLabel = `${entries.length} suosikkia`;
+  count.textContent =
+    visibleEntries.length !== entries.length
+      ? `${visibleEntries.length} / ${entries.length} suosikkia`
+      : totalLabel;
   context.textContent = pendingRemovals.size
     ? 'Poista punaiseksi muuttuneet sydämet tallentamalla muutokset.'
     : '';
@@ -606,6 +663,7 @@ function bindActions() {
 async function init() {
   decodeActiveNames();
   await loadData();
+  initGenderFilter();
   const initialContext = getSurnameMatchContext();
   const initialResolution = initialContext.resolution;
   const initialMissing = Boolean(surnameValue && !initialResolution.matchEntry);
