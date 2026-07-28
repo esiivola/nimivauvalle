@@ -96,10 +96,11 @@ function deriveSlug() {
   if (querySlug) return querySlug;
   const path = window.location.pathname || '';
   const match = path.match(/\/([^/]+)\.html?$/i);
-  return match ? match[1] : null;
+  const pathSlug = match ? match[1] : null;
+  return pathSlug === 'post' ? null : pathSlug;
 }
 
-function applyMeta(meta = {}) {
+function applyMeta(meta = {}, slug = '') {
   const siteTitle = document.getElementById('post-title');
   if (siteTitle) siteTitle.textContent = 'Nimi vauvalle';
 
@@ -120,19 +121,30 @@ function applyMeta(meta = {}) {
       document.head.appendChild(el);
     }
   }
+  if (slug) {
+    const canonicalUrl = `https://nimivauvalle.fi/artikkelit/${encodeURIComponent(slug)}.html`;
+    const canonical = document.querySelector('link[rel="canonical"]');
+    if (canonical) canonical.href = canonicalUrl;
+    const ogUrl = document.querySelector('meta[property="og:url"]');
+    if (ogUrl) ogUrl.setAttribute('content', canonicalUrl);
+  }
 }
 
 async function loadPost() {
   const slug = deriveSlug();
   const content = document.getElementById('post-content');
-  if (!slug || !content) return;
+  if (!content) return;
+  if (!slug) {
+    content.innerHTML = '<p class="hint">Valitse kirjoitus blogista.</p>';
+    return;
+  }
   content.innerHTML = '<p class="hint">Ladataan…</p>';
   try {
     const res = await fetch(`./${slug}.md`);
     if (!res.ok) throw new Error('not found');
     const raw = await res.text();
     const { meta, body } = parseFrontmatter(raw);
-    applyMeta(meta);
+    applyMeta(meta, slug);
 
     content.innerHTML = '';
     const header = document.createElement('header');

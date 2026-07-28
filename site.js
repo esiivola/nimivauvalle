@@ -6,31 +6,51 @@ const FAVICON_URL = '/favicon.ico';
 const SAFARI_MASK_ICON = '/safari-pinned-tab.svg';
 const SAFARI_MASK_COLOR = '#ff7d6e';
 const APPLE_TOUCH_ICON = '/apple-touch-icon.png';
+const THEME_COLOR = '#ff7d6e';
+const WEB_MANIFEST = '/site.webmanifest';
 const SITE_ORIGIN = 'https://nimivauvalle.fi';
+
+// The full cross-platform icon set. Injected on every page (including the
+// generated blog posts) so browsers, iOS/Android home-screen and PWA install
+// all resolve an icon. Static copies also live in the page <head>s.
+const ICON_LINKS = [
+  { rel: 'icon', href: FAVICON_URL, type: 'image/x-icon', sizes: 'any' },
+  { rel: 'icon', href: '/favicon-32x32.png', type: 'image/png', sizes: '32x32' },
+  { rel: 'icon', href: '/favicon-16x16.png', type: 'image/png', sizes: '16x16' },
+  { rel: 'apple-touch-icon', href: APPLE_TOUCH_ICON, sizes: '180x180' },
+  { rel: 'mask-icon', href: SAFARI_MASK_ICON, color: SAFARI_MASK_COLOR }
+];
 
 function ensureFavicon() {
   const head = document.head;
   if (!head) return;
-  const iconLink =
-    head.querySelector('link[rel="icon"]') || head.querySelector('link[rel="shortcut icon"]');
-  const favicon = iconLink || document.createElement('link');
-  favicon.rel = 'icon';
-  favicon.type = 'image/x-icon';
-  favicon.href = FAVICON_URL;
-  favicon.setAttribute('sizes', 'any');
-  if (!iconLink) head.appendChild(favicon);
-
-  const maskLink = head.querySelector('link[rel="mask-icon"]') || document.createElement('link');
-  maskLink.rel = 'mask-icon';
-  maskLink.href = SAFARI_MASK_ICON;
-  maskLink.setAttribute('color', SAFARI_MASK_COLOR);
-  if (!maskLink.parentNode) head.appendChild(maskLink);
-
-  const appleLink = head.querySelector('link[rel="apple-touch-icon"]') || document.createElement('link');
-  appleLink.rel = 'apple-touch-icon';
-  appleLink.href = APPLE_TOUCH_ICON;
-  appleLink.setAttribute('sizes', '180x180');
-  if (!appleLink.parentNode) head.appendChild(appleLink);
+  ICON_LINKS.forEach((spec) => {
+    const selector = spec.sizes
+      ? `link[rel="${spec.rel}"][sizes="${spec.sizes}"]`
+      : `link[rel="${spec.rel}"]`;
+    let link = head.querySelector(selector);
+    if (!link) {
+      link = document.createElement('link');
+      head.appendChild(link);
+    }
+    link.rel = spec.rel;
+    link.href = spec.href;
+    if (spec.type) link.type = spec.type;
+    if (spec.sizes) link.setAttribute('sizes', spec.sizes);
+    if (spec.color) link.setAttribute('color', spec.color);
+  });
+  if (!head.querySelector('link[rel="manifest"]')) {
+    const manifest = document.createElement('link');
+    manifest.rel = 'manifest';
+    manifest.href = WEB_MANIFEST;
+    head.appendChild(manifest);
+  }
+  if (!head.querySelector('meta[name="theme-color"]')) {
+    const theme = document.createElement('meta');
+    theme.name = 'theme-color';
+    theme.content = THEME_COLOR;
+    head.appendChild(theme);
+  }
 }
 
 function injectAnalyticsTag() {
@@ -65,7 +85,8 @@ function injectSeoMeta() {
       ?.getAttribute('content') ||
     'Älykäs nimikone ja nimilista: etsi vauvalle sopivin nimi.';
   const path = window.location?.pathname || '/';
-  const canonicalUrl = `${SITE_ORIGIN}${path === '/' ? '/' : path}`;
+  const existingCanonical = head.querySelector('link[rel="canonical"]')?.getAttribute('href')?.trim();
+  const canonicalUrl = existingCanonical || `${SITE_ORIGIN}${path === '/' ? '/' : path}`;
 
   const ensureTag = (selector, create) => {
     let el = head.querySelector(selector);
@@ -118,6 +139,20 @@ function injectSeoMeta() {
   });
   ogImage.setAttribute('content', `${SITE_ORIGIN}/assets/og-image.png`);
 
+  [
+    ['og:image:width', '1200'],
+    ['og:image:height', '630'],
+    ['og:image:type', 'image/png'],
+    ['og:image:alt', 'Nimi vauvalle']
+  ].forEach(([property, content]) => {
+    const el = ensureTag(`meta[property="${property}"]`, () => {
+      const m = document.createElement('meta');
+      m.setAttribute('property', property);
+      return m;
+    });
+    el.setAttribute('content', content);
+  });
+
   const twCard = ensureTag('meta[name="twitter:card"]', () => {
     const m = document.createElement('meta');
     m.setAttribute('name', 'twitter:card');
@@ -145,6 +180,13 @@ function injectSeoMeta() {
     return m;
   });
   twImage.setAttribute('content', `${SITE_ORIGIN}/assets/og-image.png`);
+
+  const twImageAlt = ensureTag('meta[name="twitter:image:alt"]', () => {
+    const m = document.createElement('meta');
+    m.setAttribute('name', 'twitter:image:alt');
+    return m;
+  });
+  twImageAlt.setAttribute('content', 'Nimi vauvalle');
 }
 
 function injectSearchLdJson() {
@@ -264,6 +306,28 @@ export function injectHeaderNav() {
   navLink.href = navHref;
 }
 
+function patchConsentAccessibility(modal) {
+  // The third-party consent widget renders its toggle checkboxes without an
+  // associated <label>, and its "save" button's aria-label omits the visible
+  // text. Supply the missing accessible names here (site-side) rather than
+  // editing the vendored library. No-ops if the elements are absent.
+  const toggleLabels = {
+    'cookies-necessary': 'Välttämättömät evästeet',
+    'cookies-analytics': 'Analytiikkaevästeet',
+    'cookies-advertising': 'Mainosevästeet',
+    'cookies-marketing': 'Markkinointievästeet'
+  };
+  Object.entries(toggleLabels).forEach(([id, label]) => {
+    const input = modal.querySelector(`#${id}`);
+    if (input && !input.getAttribute('aria-label')) {
+      input.setAttribute('aria-label', label);
+    }
+  });
+  // WCAG "Label in Name": let the visible button text be the accessible name.
+  const saveBtn = modal.querySelector('.preferences-save');
+  if (saveBtn) saveBtn.removeAttribute('aria-label');
+}
+
 export function attachSilktideAttribution() {
   let attempts = 0;
   const timer = setInterval(() => {
@@ -275,6 +339,7 @@ export function attachSilktideAttribution() {
       }
       return;
     }
+    patchConsentAccessibility(modal);
     const existing = modal.querySelector('.silktide-attribution');
     if (existing) {
       clearInterval(timer);

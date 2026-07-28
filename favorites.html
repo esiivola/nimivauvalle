@@ -15,20 +15,20 @@
       name="description"
       content="Tallenna ja jaa omat nimisuosikkisi: Nimi vauvalle -palvelun suosikit-lista."
     />
+    <meta name="robots" content="noindex, follow" />
     <link
       href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Mea+Culpa&display=swap"
       rel="stylesheet"
     />
-    <link rel="canonical" href="https://nimivauvalle.fi/favorites.html" />
+    <link rel="canonical" href="https://nimivauvalle.fi/favorites/" />
     <meta property="og:title" content="Suosikit | Nimi vauvalle" />
     <meta property="og:description" content="Tallenna ja jaa omat nimisuosikkisi Nimi vauvalle -palvelussa." />
     <!-- Silktide Consent Manager -->
     <link rel="stylesheet" id="silktide-consent-manager-css" href="/cookie-banner/silktide-consent-manager.css" />
-    <script src="/cookie-banner/silktide-consent-manager.js"></script>
+    <script src="/cookie-banner/silktide-consent-manager.js" defer></script>
     <link rel="stylesheet" href="/cookie-banner/consent-overrides.css" />
-    <script src="/cookie-banner/consent-config.js"></script>
+    <script src="/cookie-banner/consent-config.js" defer></script>
     <link rel="stylesheet" href="/styles.css" />
-    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
     <script>
       (function () {
         var path = window.location.pathname || '';
@@ -48,7 +48,7 @@
     <meta property="og:site_name" content="Nimi vauvalle" />
     <meta property="og:locale" content="fi_FI" />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://nimivauvalle.fi/favorites.html" />
+    <meta property="og:url" content="https://nimivauvalle.fi/favorites/" />
     <meta property="og:image" content="https://nimivauvalle.fi/assets/og-image.png" />
     <meta property="og:image:alt" content="Nimi vauvalle" />
     <meta name="twitter:card" content="summary_large_image" />
@@ -83,7 +83,7 @@
         </label>
         <div class="share-actions">
           <button class="ghost" type="button" id="share-favorites">Jaa suosikit</button>
-          <input type="text" id="share-url" class="share-input" readonly />
+          <input type="text" id="share-url" class="share-input" aria-label="Jaettava suosikkilinkki" readonly />
         </div>
       </div>
       <div id="favorites-gender-filter" class="favorites-options" hidden></div>
@@ -96,9 +96,9 @@
           </div>
           <div class="results-ordering">
             <label class="sort-label">
-              <select id="favorites-sort-key"></select>
+              <select id="favorites-sort-key" aria-label="Suosikkien järjestys"></select>
             </label>
-            <button class="ghost" type="button" id="favorites-toggle-sort">↓</button>
+            <button class="ghost" type="button" id="favorites-toggle-sort" aria-label="Vaihda järjestyssuunta">↓</button>
           </div>
         </div>
         <div id="favorites-list" class="name-list"></div>
@@ -138,9 +138,12 @@
     </div>
     <div data-include="/footer.html"></div>
     <script type="module">
+      // Absolute paths required: the inline script above rewrites the URL to
+      // /favorites/, which would make ./ specifiers resolve under /favorites/.
       import { initPageChrome } from '/site.js';
       initPageChrome();
     </script>
+    <!-- Absolute path required (the URL is rewritten to /favorites/ above). -->
     <script type="module" src="/favorites.js"></script>
   </body>
 </html>

@@ -1,7 +1,7 @@
-import { createCardShell } from '/shared-cards.js';
-import { loadDataset } from '/data-service.js';
-import { createDetailService } from '/detail-service.js';
-import { createCardDetailLoader } from '/name-detail-renderer.js';
+import { createCardShell } from './shared-cards.js';
+import { loadDataset } from './data-service.js';
+import { createDetailService } from './detail-service.js';
+import { createCardDetailLoader } from './name-detail-renderer.js';
 
 const SITE_ORIGIN = 'https://nimivauvalle.fi';
 const OG_IMAGE = `${SITE_ORIGIN}/assets/og-image.png`;
@@ -83,6 +83,7 @@ function applySeo(entry) {
   const ogTitle = `${display} – etunimen tiedot | Nimi vauvalle`;
 
   document.title = pageTitle;
+  setNamedMeta('robots', 'index, follow');
   setNamedMeta('description', description);
   setCanonical(canonical);
   setPropMeta('og:title', ogTitle);

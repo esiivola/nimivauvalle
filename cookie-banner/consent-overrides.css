@@ -1,6 +1,9 @@
 # Silktide Consent Manager overrides aligned with site styling
 :root {
-  --silktide-accent: var(--accent, #ff7d6e);
+  /* A darker shade of the brand coral, used only inside the consent widget so
+     buttons (white text) and links meet WCAG AA 4.5:1 contrast. The site's own
+     --accent stays #ff7d6e. */
+  --silktide-accent: #bd4a36;
   --silktide-bg: var(--bg, #fefbf7);
   --silktide-text: var(--text, #1f2230);
   --silktide-muted: var(--muted, #6f7486);
@@ -229,12 +232,31 @@
 
 /* Links */
 #silktide-modal a {
-  color: var(--accent, #ff7d6e) !important;
+  color: #bd4a36 !important;
   text-decoration: underline;
   font-weight: 600;
 }
 #silktide-modal a:hover {
-  color: #e86c5e !important;
+  color: #9e3624 !important;
+}
+
+/* Primary buttons ("Hyväksy kaikki" / "Tallenna valinnat"): white text needs a
+   dark-enough background for WCAG AA 4.5:1, so pin it with a literal darker
+   coral rather than relying on the --primaryColor variable chain. */
+#silktide-modal button.primary,
+#silktide-wrapper button.primary,
+#silktide-modal .preferences-accept-all,
+#silktide-wrapper .preferences-accept-all {
+  background-color: #bd4a36 !important;
+  color: #ffffff !important;
+}
+
+/* Require an explicit choice: hide the modal's dismiss (×) so the visitor must
+   accept, reject, or save a selection. The backdrop has no click-to-dismiss and
+   Escape is blocked (consent-config.js) until a choice is made. Reject stays
+   available, so this remains GDPR / Google-consent compliant. */
+#silktide-modal .modal-close {
+  display: none !important;
 }
 
 /* Hide default Silktide credit, keep our attribution */

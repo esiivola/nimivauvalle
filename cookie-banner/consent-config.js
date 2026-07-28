@@ -24,7 +24,7 @@
         name: 'Analytiikka',
         description:
           '<p>Nämä evästeet auttavat kehittämään sivua seuraamalla, mitkä sivut ovat suosituimpia ja miten kävijät liikkuvat sivustolla.</p>',
-        defaultValue: true,
+        defaultValue: false,
         onAccept: function () {
           gtag('consent', 'update', { analytics_storage: 'granted' });
           dataLayer.push({ event: 'consent_accepted_analytics' });
@@ -58,9 +58,10 @@
   };
 
   function applyDefaultConsent() {
+    // Nothing non-essential runs until the visitor explicitly consents.
     gtag('consent', 'default', {
       ad_storage: 'denied',
-      analytics_storage: 'granted',
+      analytics_storage: 'denied',
       ad_personalization: 'denied',
       ad_user_data: 'denied',
     });
@@ -77,6 +78,28 @@
     const wrappers = Array.from(document.querySelectorAll('#silktide-wrapper'));
     wrappers.slice(1).forEach((node) => node.remove());
   };
+
+  // Require an explicit choice on first visit: block Escape from dismissing the
+  // consent modal until the visitor has accepted or rejected (the × is hidden
+  // via CSS and the backdrop is not click-dismissible). Capture phase so this
+  // runs before the widget's own Escape handler. Once a choice is stored, the
+  // (reopened) modal closes normally again.
+  document.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.key !== 'Escape') return;
+      try {
+        if (localStorage.getItem('silktideCookieBanner_InitialChoice')) return;
+      } catch (err) {
+        /* localStorage blocked — keep requiring a choice */
+      }
+      if (document.getElementById('silktide-modal')) {
+        event.stopImmediatePropagation();
+        event.preventDefault();
+      }
+    },
+    true
+  );
 
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
     window.initConsentBanner();

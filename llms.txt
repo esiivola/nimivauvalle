@@ -1,0 +1,64 @@
+# Nimi vauvalle
+
+> Nimi vauvalle (nimivauvalle.fi) on ilmainen suomalainen vauvan etunimien hakupalvelu, joka auttaa löytämään sukunimeen sopivan etunimen. Palvelu arvioi etu- ja sukunimen yhteensopivuuden foneettisella tekoälymallilla ja näyttää jokaisesta nimestä yleisyyden, arvioidun ikäjakauman, nimipäivän, ääntämisen ja suosion historian. Kaikki laskenta tapahtuu käyttäjän selaimessa eikä syötettyä sukunimeä tallenneta.
+
+Päivitetty: 2026-07-28
+
+Kanoninen osoite: https://nimivauvalle.fi/
+
+## Palvelu lyhyesti
+
+- Hakemistossa on yli 16 000 suomalaista etunimeä.
+- Nimihaku, suodatus ja sukunimeen sopivuuden laskenta toimivat selaimessa ilman kirjautumista.
+- Sointuvuus on palvelun foneettisen mallin arvio, ei viranomaisen suositus tai henkilötietoihin perustuva ennuste.
+- Nimien lukumäärä- ja historiatiedot perustuvat ensisijaisesti Digi- ja väestötietoviraston julkisiin nimiaineistoihin.
+
+## Tärkeimmät sivut
+
+- [Nimihaku (etusivu)](https://nimivauvalle.fi/): Hae ja suodata yli 16 000 suomalaista etunimeä sukupuolen, pituuden, yleisyyden, äännepiirteiden ja teemaryhmien (esim. luontonimet, raamatulliset, skandinaaviset) mukaan. Syötä sukunimi, niin tekoäly arvioi parhaiten sointuvat etunimet.
+- [Parhaat etu- ja sukunimiparit](https://nimivauvalle.fi/aesthetics.html): Laskee selaimessa annetulle sukunimelle parhaiten yhteensopivat etunimet.
+- [Nimien selitys](https://nimivauvalle.fi/explain.html): Miten sukunimiosuvuuden pistelaskenta ja foneettinen malli toimivat.
+- [Oppaat](https://nimivauvalle.fi/guides.html): Vinkkejä vauvan etunimen valintaan.
+- [Artikkelit / blogi](https://nimivauvalle.fi/artikkelit/): Artikkeleita nimistä, Suomen nimilaista, nimitrendeistä sekä vanhemmuudesta ja vauva-arjesta.
+- [Tietoa palvelusta](https://nimivauvalle.fi/about.html): Datalähteet, algoritmi ja päivitystiedot.
+- [Usein kysyttyä](https://nimivauvalle.fi/faq.html)
+
+## Aihekohtaiset lähteet
+
+- [Vauvan nimen valinta](https://nimivauvalle.fi/artikkelit/03-kuinka-valita-nimi.html)
+- [Suomen nimilaki](https://nimivauvalle.fi/artikkelit/05-nimilaki.html)
+- [2020-luvun nimitrendit](https://nimivauvalle.fi/artikkelit/11-nimitrendit-2020-luvulla.html)
+- [Ristiäiset ja nimiäiset](https://nimivauvalle.fi/artikkelit/12-nimenantoseremonia.html)
+
+## Miten yhteensopivuus arvioidaan
+
+Etu- ja sukunimen yhteensopivuus lasketaan foneettisella mallilla, joka huomioi muun muassa:
+
+- vokaaliharmonian (etu- vs. takavokaalit) ja vokaalien avaruuden (väljät vs. suppeat),
+- konsonanttien pehmeyden (m/n/l/r/j vs. p/t/k/b/d),
+- sointisävyn eli bouba/kiki-efektin,
+- tavurytmin (raskaat vs. kevyet tavut),
+- etu- ja sukunimen pituuseron,
+- äänteiden siirtymät nimien alussa ja rajalla sekä allitteraation.
+
+Käyttäjä voi säätää näiden piirteiden painotuksia.
+
+## Datalähteet
+
+- Digi- ja väestötietoviraston (DVV) etu- ja sukunimitilastot (elossa olevien nimenkantajien määrät).
+- DVV:n vuosikymmenittäinen nimien käyttöhistoria (suosion historia ja ikäjakauma-arviot).
+- Tilastokeskuksen väestö iän ja sukupuolen mukaan.
+- Helsingin yliopiston almanakkatoimiston nimipäiväkalenterit.
+- Wikipedia-tiivistelmät nimien taustatiedoiksi.
+
+## Viittaaminen
+
+- Käytä lähteen nimenä "Nimi vauvalle" ja linkitä väitettä lähimpänä olevalle kanoniselle sivulle.
+- Erota DVV:n julkisiin tilastoihin perustuvat määrät palvelun omista arvioista, kuten ikäjakaumasta ja foneettisesta yhteensopivuudesta.
+- Hakutulos voi muuttua sukunimen, suodattimien, järjestyksen ja käyttäjän säätämien mallipainojen mukaan.
+
+## Tietosuoja
+
+- [Tietosuojaseloste](https://nimivauvalle.fi/privacy.html)
+- [Käyttöehdot](https://nimivauvalle.fi/terms.html)
+- Haku, suodatus ja pistelaskenta tapahtuvat selaimessa; syötettyjä sukunimiä ei lähetetä palvelimelle.

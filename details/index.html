@@ -8,6 +8,7 @@
       name="description"
       content="Katso nimen suosiohistoria, äännepiirteet ja muut tiedot. Syötä osoitteeseen ?name=Etunimi."
     />
+    <meta name="robots" content="noindex, follow" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -19,7 +20,6 @@
     <script src="../cookie-banner/silktide-consent-manager.js"></script>
     <link rel="stylesheet" href="../cookie-banner/consent-overrides.css" />
     <script src="../cookie-banner/consent-config.js"></script>
-    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
   </head>
   <body data-nav-label="Siirry etusivulle" data-nav-href="/">
     <main class="layout">
@@ -28,6 +28,7 @@
           <a class="ghost favorite-nav" href="/">Siirry etusivulle</a>
         </nav>
         <div class="branding wide">
+          <h1 class="visually-hidden" id="detail-title">Nimitiedot</h1>
           <p class="hero-subtitle" id="detail-subtitle">Ladataan nimen tietoja…</p>
         </div>
       </header>

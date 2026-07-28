@@ -7,6 +7,38 @@ const WIKI_API_BASE = 'https://fi.wikipedia.org/w/api.php?origin=*';
 const WIKI_INFOBOX_LABELS = ['Muunnelmia', 'Vastineita eri kielissä', 'Nimen alkuperä'];
 const EMPTY_FIELD_PATTERN = /^[-–—]+$/;
 
+const PLOTLY_SRC = 'https://cdn.plot.ly/plotly-2.26.0.min.js';
+let plotlyPromise = null;
+
+// Load Plotly (~1 MB) from the CDN on demand — only when a chart is actually
+// about to render — instead of eagerly on every page. Resolves to window.Plotly,
+// or null if the script fails to load (callers then show the no-data fallback).
+export function ensurePlotly() {
+  if (typeof window === 'undefined') return Promise.resolve(null);
+  if (window.Plotly) return Promise.resolve(window.Plotly);
+  if (plotlyPromise) return plotlyPromise;
+  plotlyPromise = new Promise((resolve) => {
+    const done = () => resolve(window.Plotly || null);
+    const existing = document.querySelector('script[data-plotly]');
+    if (existing) {
+      existing.addEventListener('load', done);
+      existing.addEventListener('error', () => resolve(null));
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = PLOTLY_SRC;
+    script.async = true;
+    script.dataset.plotly = 'true';
+    script.onload = done;
+    script.onerror = () => {
+      plotlyPromise = null;
+      resolve(null);
+    };
+    document.head.appendChild(script);
+  });
+  return plotlyPromise;
+}
+
 export function escapeHtml(value = '') {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -76,7 +108,7 @@ export function renderPhoneticSummary(entry, phoneticMeta, options = {}) {
     .join('');
 }
 
-export function renderUsageChart(container, history, labels = {}) {
+export async function renderUsageChart(container, history, labels = {}) {
   if (!container) return;
   const {
     noData = 'Ei historiallista käyttödataa',
@@ -84,11 +116,6 @@ export function renderUsageChart(container, history, labels = {}) {
     legendFemale = 'Naisia',
     yAxis = '%-osuus annetuista nimistä'
   } = labels;
-  const plotly = window.Plotly;
-  if (!plotly) {
-    container.textContent = noData;
-    return;
-  }
   const periods = history?.periods || [];
   if (!periods.length) {
     container.textContent = noData;
@@ -114,6 +141,11 @@ export function renderUsageChart(container, history, labels = {}) {
   });
   const hasData = datasets.some((dataset) => dataset.share.some((value) => value > 0));
   if (!hasData) {
+    container.textContent = noData;
+    return;
+  }
+  const plotly = await ensurePlotly();
+  if (!plotly) {
     container.textContent = noData;
     return;
   }
@@ -174,16 +206,16 @@ export function renderUsageChart(container, history, labels = {}) {
   });
 }
 
-export function renderAgeDistributionChart(container, population, targetTotal, labels = {}) {
+export async function renderAgeDistributionChart(container, population, targetTotal, labels = {}) {
   if (!container) return;
   const { noData = 'Ei ikäjakaumatietoa', yAxis = 'Henkilöitä (arvio)' } = labels;
-  const plotly = window.Plotly;
-  if (!plotly) {
+  const rawData = population?.ageDistribution || [];
+  if (!rawData.length) {
     container.textContent = noData;
     return;
   }
-  const rawData = population?.ageDistribution || [];
-  if (!rawData.length) {
+  const plotly = await ensurePlotly();
+  if (!plotly) {
     container.textContent = noData;
     return;
   }

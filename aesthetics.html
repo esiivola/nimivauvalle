@@ -64,7 +64,7 @@
           <summary>Rajaa etunimellä</summary>
           <div class="collapsible-body">
             <div class="input-row" style="margin-top:0.35rem;">
-              <input id="first-name-input" type="text" placeholder="Kirjoita etunimi" />
+              <input id="first-name-input" type="text" placeholder="Kirjoita etunimi" aria-label="Etunimi" />
             </div>
             <p id="first-name-status" class="hint"></p>
           </div>
@@ -73,11 +73,11 @@
           <summary>Muokkaa arvioon sisältyvien nimien määrää</summary>
           <div class="collapsible-body">
             <div class="letter-grid" style="margin-top:0.35rem;">
-              <label>
+              <label for="top-first">
                 Laskentaan otettavien etunimien määrä
                 <input id="top-first" type="number" value="1000" min="100" max="5000" step="100" />
               </label>
-              <label>
+              <label for="top-last">
                 Laskentaan otettavien sukunimien määrä
                 <input id="top-last" type="number" value="2000" min="100" max="5000" step="100" />
               </label>

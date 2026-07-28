@@ -1,10 +1,8 @@
-import { createCardShell } from './shared-cards.js';
-import { loadDataset } from './data-service.js';
+import { loadDataset, loadSurnames } from './data-service.js';
 import { createDetailService } from './detail-service.js';
 import { createAdTracker } from './detail-utils.js';
 import { FAVORITES_KEY, loadFavorites, saveFavorites } from './favorites-store.js';
-import { loadMatchingModel, computePairScore as computeModelPairScore, computeBuckets } from './matching-model.js';
-import { buildExplanation, friendlyBucket } from './explain-utils.js';
+import { loadMatchingModel } from './matching-model.js';
 import { registerAdSlots, setAdSlotsEnabled } from './ad-service.js';
 import {
   buildSurnameData,
@@ -13,19 +11,15 @@ import {
   resolveSurnameEntry,
   formatSurnameUsage
 } from './surname-service.js';
-import MATCH_WEIGHT_FIELDS from './weight-fields.js';
 import { createCardDetailLoader } from './name-detail-renderer.js';
 import {
   areWeightsEqual,
   computeAbsoluteWeightBudget,
-  formatPercentNumber,
   normalizeWeightMap,
   parseWeightOverrides,
-  percentToWeight,
   persistSharedWeights,
   readSharedWeights,
-  serializeWeightOverrides,
-  weightToPercent
+  serializeWeightOverrides
 } from './weight-utils.js';
 import {
   DEFAULT_GENDERS,
@@ -39,90 +33,27 @@ import {
   readFilterQuery,
   writeFilterQuery
 } from './state-store.js';
-
-const PAGE_SIZE = 50;
-
-const translations = {
-  fi: {
-    genders: {
-      female: 'Nainen',
-      male: 'Mies',
-      unisex: 'Unisex',
-      unknown: 'Tuntematon'
-    },
-    results: (start, end, total) => `Näytetään ${start}-${end} / ${total} nimeä`,
-    noResults: 'Valituilla rajauksilla ei löytynyt yhtään nimeä.',
-    match: (surname) => surname ? `Vauvan sukunimi on “${surname}”` : 'Sukunimiyhteensopivuus pois käytöstä',
-    missingSurname: (surname) => `Sukunimeä “${surname}” ei löytynyt aineistosta - vertailu ohitettiin.`,
-    matchLabel: 'Sukunimiosuvuus',
-    grade: (label) => `Taso: ${label}`,
-    historyTitle: 'Nimen suosio historiassa',
-    historyLinkText: 'linkki',
-    historyLegendMale: 'Miehiä',
-    historyLegendFemale: 'Naisia',
-    historyYAxis: '%-osuus annetuista nimistä',
-    historyNoData: 'Ei historiallista käyttödataa',
-    populationTag: (count) => `Arvio: ~${count} hlöä`,
-    comboTag: (count) => {
-      const rounded = Math.round(count);
-      return rounded >= 1 ? `Täyskaimoja: ~${rounded} hlöä` : '';
-    },
-    comboLabel: 'Arvio valitun sukunimen kanssa',
-    populationTitle: 'Arvioitu määrä Suomessa',
-    populationTotalLabel: 'Yhteensä',
-    populationShareLabel: 'Osuus väestöstä',
-    populationNoData: 'Ei arviota',
-    ageDistributionTitle: 'Ikäjakauma (arvio)',
-    ageDistributionYAxis: 'Henkilöitä (arvio)',
-    ageDistributionNoData: 'Ei ikäjakaumatietoa',
-    surnameUsage: (count, rank) => `Sukunimeä käyttää ${count} henkilöä ja se on ${rank}:s yleisin.`,
-    firstNameAnalysisTitle: 'Etunimen äänneprofiili',
-    nameDayLabel: 'Nimipäivä',
-    wikiTitle: 'Tietoa nimestä',
-    wikiLoading: 'Haetaan Wikipedia-tiivistelmää…',
-    wikiUnavailable: 'Wikipedia-artikkelia ei löytynyt',
-    detailsLoading: 'Haetaan nimen tarkempia tietoja…',
-    detailsError: 'Tietojen lataus epäonnistui.',
-    pronunciationTitle: 'Ääntäminen',
-    comboRowLabel: 'Täyskaimoja',
-    comboRowNote: 'perustuu suku- ja etunimien yleisyyteen',
-    groupTitle: 'Ryhmäjäsenyydet',
-    phoneticTitle: 'Äännepiirteet',
-    noGroupMembership: 'Ei ryhmäjäsenyyksiä',
-    noPhoneticHighlights: 'Ei erityisiä piirteitä'
-    ,
-    filterSummary: {
-      groupInclude: 'Vain tällaiset nimet',
-      groupExclude: 'Poista tällaiset nimet',
-      featureInclude: 'Nimessä oltava',
-      featureExclude: 'Poistettava',
-      featureMin: 'Vähintään taso',
-      featureMax: 'Enintään taso',
-      lettersInclude: 'Nimen tulee sisältää',
-      lettersExclude: 'Nimessä ei saa olla',
-      population: 'Nimenhaltijat'
-    },
-    weightEditor: {
-      eyebrow: 'Tekoälyn käyttämät painotukset',
-      title: 'Muokkaa tekoälyn painotuksia',
-      description:
-        'Kerro tekoälylle, minkälaisia nimiä haluat sen suosittelevan. Korkeammat positiiviset prosentit kertovat tekoälylle, että tämä asia on sinulle tärkeä. Negatiiviset prosentit saavat sen välttelemään sellaisia nimiä, joissa kuvailtu asia on voimakas. Voit tarkistaa sivun alalaidasta, kuinka paljon prosentteja sinun pitää vielä lisätä tai vähentää.',
-      total: (value) => `Käytössä ${value.toFixed(1)} % / 100 %`,
-      balance: (value) =>
-        value > 0
-          ? `Vapaana ${value.toFixed(1)} %`
-          : value < 0
-            ? `Ylittää ${Math.abs(value).toFixed(1)} %`
-            : 'Täsmälleen 100 % käytetty',
-      absRequirement: 'Painot on käytettävä tasan 100 %:iin asti.',
-      invalid: 'Täytä kaikki prosenttikentät numeroin.',
-      penaltyNote: 'Negatiiviset prosentit saavat tekoälyn välttelemään tällaisia nimiä',
-      resetLabel: 'Palauta oletukset',
-      cancelLabel: 'Peruuta',
-      confirmLabel: 'OK'
-    }
-  }
-};
+import { buildPeriodRanks, createSortComparator } from './sort-service.js';
+import { buildSurnameTraitSentences } from './surname-analysis.js';
+import { createWeightEditor } from './weight-editor.js';
+import {
+  PAGE_SIZE,
+  WEIGHT_SUM_TOLERANCE,
+  DETAIL_AD_FREQUENCY,
+  SCROLL_FLAG_KEY,
+  sortDescriptions
+} from './search/constants.js';
+import { translations } from './search/strings.js';
+import {
+  normalizeGroupKey,
+  parseTriToken,
+  normalizeLetterFilter,
+  parseLetterTokens,
+  normalizeRangeValues
+} from './search/filter-tokens.js';
+import { createFilters } from './search/filters.js';
+import { createResults } from './search/results.js';
+import { createFilterUI } from './search/filter-ui.js';
 
 const state = {
   genders: new Set(DEFAULT_GENDERS),
@@ -147,6 +78,8 @@ let groupFilterId = 0;
 let data = null;
 let surnameMap = new Map();
 let surnameRankMap = new Map();
+let surnamesReady = false;
+let surnamesPromise = null;
 let phoneticMeta = new Map();
 let groupMeta = new Map();
 let groupFilterKeys = [];
@@ -154,10 +87,12 @@ let gradeMeta = [];
 let currentResults = [];
 let filteredOutResults = [];
 let orderedResults = [];
-let transitionConfig = null;
 let matchingModel = null;
 let detailService = null;
 let cardDetailLoader = null;
+let filters = null;
+let results = null;
+let filterUi = null;
 const LETTER_LIMITS = { min: 1, max: 20 };
 const POPULATION_LIMITS = { min: 0, max: 45000 };
 let populationBaseEstimate = 5600000;
@@ -166,42 +101,20 @@ let favorites = new Set();
 let surnameInputTimer = null;
 let autoApplyTimer = null;
 let weightPercentBudget = 1;
-let weightEditorControls = null;
-let weightEditorInputs = [];
+let weightEditor = null;
 let defaultMatchingWeights = null;
-const WEIGHT_SUM_TOLERANCE = 0.05;
-const DETAIL_AD_FREQUENCY = 3;
-const normalizeGroupKey = (key) => String(key || '').toLowerCase().replace(/\.txt$/, '');
 const getFilteredCount = () => (Array.isArray(currentResults) ? currentResults.length : 0);
 
-function parseTriToken(token) {
-  const parts = (token || '').split('.');
-  if (parts.length <= 1) {
-    return { key: token || '', mode: 'include' };
-  }
-  const mode = parts.pop() || 'include';
-  const key = parts.join('.');
-  return { key, mode };
-}
 const detailAds = createAdTracker(DETAIL_AD_FREQUENCY);
 let filterFeatureMeta = [];
 const expandedFilteredBlocks = new Set();
-let surnameExplainLink = null;
 let surnameExplainModal = null;
 let hasScrolledToResults = false;
 let pendingResultsScroll = false;
 let resultsScrollRetryTimer = null;
 let resultsScrollCleanupTimer = null;
-const SCROLL_FLAG_KEY = 'scrollToResults';
 
 const $ = (sel) => document.querySelector(sel);
-
-function getDisplayableCount() {
-  return orderedResults.reduce((acc, entry) => {
-    const hasGenderBlock = entry._filteredReasons?.some((r) => r.key === 'gender');
-    return hasGenderBlock ? acc : acc + 1;
-  }, 0);
-}
 
 function getTypedSurname() {
   return (state.surname || '').trim();
@@ -261,19 +174,9 @@ function updateFilterPanels() {
   setPanelOpen('extra-filter-panel', hasTraitFilters || hasRangeFilters || hasPopularity);
 }
 
-const sortDescriptions = {
-  alpha: 'Aakkosjärjestys A-Ö.',
-  popularity: 'Järjestää eniten annetuista nimistä vähiten annettuihin.',
-  match:
-    'Painottaa vokaalien sijaintia ja avaruutta, sointisävyä, konsonanttien pehmeyttä sekä kirjainryhmien todennäköisiä siirtymiä nimien alussa ja välissä.',
-  valence: 'Korkeampi arvo tarkoittaa kirkkaampaa sointia, matalampi tummempaa sävyä.',
-  nasal_intensity: 'Korostaa m-, n- ja ng-äänteiden määrää nimessä.',
-  r_intensity: 'Lajittelee r-äänteiden määrästä voimakkaimpaan.'
-};
-
 async function loadData() {
   const [dataset, model] = await Promise.all([
-    loadDataset({ includeSurnames: true }),
+    loadDataset({ includeSurnames: false }),
     loadMatchingModel()
   ]);
   const totalPop = Number(dataset?.populationTotal || 0);
@@ -286,6 +189,42 @@ async function loadData() {
     if (shared) state.weightOverrides = shared;
   }
   return dataset;
+}
+
+// last-names.json (~1 MB gzip / ~9 MB parsed) powers only the surname-match
+// feature, so it is loaded on demand — on idle after first paint and when the
+// surname field is used — instead of blocking the initial render. Until it
+// arrives, surnameMap is empty and surname matching simply degrades gracefully.
+function ensureSurnames() {
+  if (surnamesReady) return Promise.resolve();
+  if (surnamesPromise) return surnamesPromise;
+  surnamesPromise = loadSurnames()
+    .then((surnames) => {
+      data.surnames = surnames;
+      const surnameData = buildSurnameData(surnames);
+      surnameMap = surnameData.map;
+      surnameRankMap = surnameData.rankMap;
+      surnamesReady = true;
+      // A surname may already be typed or restored from a shared link —
+      // recompute its analysis and the match scores now that data is present.
+      if (getTypedSurname()) {
+        updateSurnameAnalysis(resolveSurnameEntry(surnameMap, getTypedSurname()));
+        applyFilters();
+      }
+    })
+    .catch(() => {
+      surnamesPromise = null;
+    });
+  return surnamesPromise;
+}
+
+function prefetchSurnames() {
+  const start = () => ensureSurnames();
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(start, { timeout: 3000 });
+  } else {
+    setTimeout(start, 1200);
+  }
 }
 
 function initSelects() {
@@ -336,7 +275,6 @@ function buildMetaMaps() {
   const surnameData = buildSurnameData(data.surnames || []);
   surnameMap = surnameData.map;
   surnameRankMap = surnameData.rankMap;
-  transitionConfig = data.schema.matching?.transitions || null;
   detailService = createDetailService(data.schema);
   cardDetailLoader = createCardDetailLoader({
     ensureEntryDetails: (entry) => detailService.ensureEntryDetails(entry),
@@ -347,100 +285,52 @@ function buildMetaMaps() {
     buildHistoryLabel: (entry) => createHistoryLabel(entry, translations.fi)
   });
   filterFeatureMeta = data.schema.filterFeatures || [];
-}
-
-function getTransitionProbability(fromGroup, toGroup) {
-  if (!transitionConfig || !fromGroup || !toGroup) {
-    return transitionConfig?.default || 0;
-  }
-  const index = transitionConfig.groupIndex || {};
-  const fromIdx = index[fromGroup];
-  const toIdx = index[toGroup];
-  if (fromIdx == null || toIdx == null) {
-    return transitionConfig.default || 0;
-  }
-  const matrix = transitionConfig.matrix || [];
-  const row = matrix[fromIdx];
-  if (!row) {
-    return transitionConfig.default || 0;
-  }
-  const value = row[toIdx];
-  return typeof value === 'number' ? value : transitionConfig.default || 0;
-}
-
-function normalizeTransitionProbability(probability) {
-  if (!transitionConfig) return 0;
-  const baseline = transitionConfig.baseline ?? 0;
-  let normalized = 0;
-  if (probability >= baseline) {
-    const denom = 1 - baseline;
-    normalized = denom ? (probability - baseline) / denom : 0;
-  } else if (baseline) {
-    normalized = (probability - baseline) / baseline;
-  }
-  return clampSigned(normalized);
-}
-
-function normalizeLetterFilter(value) {
-  if (!value) return '';
-  return value
-    .toLowerCase()
-    .replace(/[^a-zåäöæøœšžß\u00c0-\u017f,\s\-\^\$\*]/g, '');
-}
-
-function parseLetterTokens(value) {
-  return (value || '')
-    .split(/[,\s]+/)
-    .map((token) => token.trim())
-    .filter(Boolean);
-}
-
-function buildCharCounts(str) {
-  const counts = new Map();
-  for (const ch of str.toLowerCase()) {
-    const current = counts.get(ch) || 0;
-    counts.set(ch, current + 1);
-  }
-  return counts;
-}
-
-function tokenSatisfied(nameCounts, token) {
-  if (!token) return true;
-  const need = buildCharCounts(token);
-  for (const [char, required] of need.entries()) {
-    if ((nameCounts.get(char) || 0) < required) return false;
-  }
-  return true;
-}
-
-function isPatternToken(token) {
-  return /[\^\*$]/.test(token);
-}
-
-function tokenMatchesPattern(name, token) {
-  let pattern = '';
-  for (const ch of token) {
-    if (ch === '*') {
-      pattern += '.*';
-    } else if (ch === '^' || ch === '$') {
-      pattern += ch;
-    } else {
-      pattern += ch.replace(/[-/\\^$+?.()|[\]{}]/g, '\\$&');
-    }
-  }
-  try {
-    const re = new RegExp(pattern, 'i');
-    return re.test(name);
-  } catch {
-    return false;
-  }
-}
-
-function tokenPasses(name, nameCounts, token) {
-  if (isPatternToken(token)) {
-    return tokenMatchesPattern(name, token);
-  }
-  return tokenSatisfied(nameCounts, token);
+  filters = createFilters({
+    state,
+    $,
+    limits: { letter: LETTER_LIMITS, population: POPULATION_LIMITS },
+    applyFilters,
+    updatePopulationInputs,
+    setLetterRangeValues: (min, max) => lettersRangeControl?.setValues(min, max),
+    getGroupMeta: () => groupMeta,
+    getPhoneticMeta: () => phoneticMeta,
+    getGroupLabel,
+    getFeatureLabel,
+    formatPopularityLabel
+  });
+  results = createResults({
+    state,
+    $,
+    getOrderedResults: () => orderedResults,
+    getCurrentResults: () => currentResults,
+    expandedFilteredBlocks,
+    getCardDetailLoader: () => cardDetailLoader,
+    isFavorite: isFavoriteName,
+    toggleFavorite: toggleFavoriteName,
+    renderActiveFilters,
+    getTypedSurname
+  });
+  filterUi = createFilterUI({
+    $,
+    state,
+    preserveScroll,
+    updateFilterPanels,
+    scheduleApplyFilters,
+    getFilterFeatureMeta: () => filterFeatureMeta,
+    getGroupMeta: () => groupMeta,
+    getPhoneticMeta: () => phoneticMeta,
+    getGroupFilterKeys: () => groupFilterKeys,
+    getFirstPhoneticKey: () => data.schema.phoneticFeatures[0]?.key,
+    getGroupLabel,
+    getFeatureLabel,
+    getGroupDescription,
+    getFeatureDescriptionByMeta,
+    getPopularityKeys,
+    getPopularityOptions,
+    getPeriodLabel,
+    nextFilterId,
+    nextGroupFilterId
+  });
 }
 
 function isFavoriteName(name) {
@@ -556,17 +446,6 @@ function toggleFavoriteName(entry, event) {
   }
 }
 
-function normalizeRangeValues(minValue, maxValue, limits) {
-  let min = Number(minValue);
-  let max = Number(maxValue);
-  if (!Number.isFinite(min)) min = limits.min;
-  if (!Number.isFinite(max)) max = limits.max;
-  min = Math.max(limits.min, Math.min(min, limits.max));
-  max = Math.max(limits.min, Math.min(max, limits.max));
-  if (min > max) min = max;
-  return { min, max };
-}
-
 function initDualSliderControl({ sliderId, labelId, limits, start }) {
   const sliderEl = $(sliderId);
   const labelEl = $(labelId);
@@ -615,18 +494,6 @@ function initDualSliderControl({ sliderId, labelId, limits, start }) {
       return { min: minValue, max: maxValue };
     }
   };
-}
-
-function estimateSyllables(entry) {
-  if (entry.metrics?.syllables != null) {
-    return Number(entry.metrics.syllables);
-  }
-  const syllableString = entry.ipa?.syllables;
-  if (syllableString) {
-    const parts = splitSyllableMarkers(syllableString);
-    if (parts.length) return parts.length;
-  }
-  return entry.display ? Math.max(1, Math.round(entry.display.length / 3)) : 1;
 }
 
 function nextFilterId() {
@@ -841,98 +708,14 @@ function syncFormWithState() {
   $('#sort-key').value = state.sortKey;
   updateSortDirToggle();
   updateSortOptionTooltips();
-  renderFeatureFilters();
-  renderPopularityFilters();
+  filterUi.renderFeatureFilters();
+  filterUi.renderPopularityFilters();
   updateFilterPanels();
 }
 
 function scheduleApplyFilters(skipFormSync = false, delay = 250) {
   clearTimeout(autoApplyTimer);
   autoApplyTimer = setTimeout(() => applyFilters(skipFormSync), delay);
-}
-
-function renderFeatureFilters() {
-  const container = $('#feature-filters');
-  if (!container) return;
-  const restore = preserveScroll(container);
-  container.innerHTML = '';
-  if (!filterFeatureMeta.length) {
-    container.innerHTML = '<p class="hint">Ei rajattavia ominaisuuksia.</p>';
-    updateFilterPanels();
-    restore();
-    return;
-  }
-  const toggleStates = (current) => {
-    const order = ['none', 'include', 'exclude'];
-    const idx = order.indexOf(current);
-    return order[(idx + 1) % order.length];
-  };
-  const grid = document.createElement('div');
-  grid.className = 'filter-columns';
-  filterFeatureMeta.forEach((meta) => {
-    const key = meta.key;
-    const type = meta.filterType;
-    let existing =
-      type === 'group'
-        ? state.groupFilters.find((f) => f.group === key)
-        : state.phoneticFilters.find((f) => f.feature === key);
-    const currentMode = existing?.mode || 'none';
-    const row = document.createElement('div');
-    row.className = 'filter-row';
-    const label = document.createElement('div');
-    label.textContent =
-      type === 'group'
-        ? getGroupLabel(groupMeta.get(key)) || meta.label
-        : getFeatureLabel(phoneticMeta.get(key)) || meta.label;
-    label.className = 'filter-label-text';
-    row.appendChild(label);
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'ghost small tri-toggle';
-    const setState = (mode) => {
-      button.dataset.state = mode;
-      button.textContent = mode === 'include' ? '+ Vain nämä' : mode === 'exclude' ? '– Poista nämä' : '○ Ei käytössä';
-    };
-    setState(currentMode);
-    button.title =
-      type === 'group'
-        ? getGroupDescription(key) || meta.description
-        : getFeatureDescriptionByMeta(phoneticMeta.get(key)) || meta.description;
-    button.addEventListener('click', () => {
-      const next = toggleStates(button.dataset.state || 'none');
-      if (next === 'none') {
-        if (type === 'group') {
-          state.groupFilters = state.groupFilters.filter((f) => f.group !== key);
-          existing = null;
-        } else {
-          state.phoneticFilters = state.phoneticFilters.filter((f) => f.feature !== key);
-          existing = null;
-        }
-      } else if (existing) {
-        existing.mode = next;
-      } else if (type === 'group') {
-        existing = { id: nextGroupFilterId(), group: key, mode: next };
-        state.groupFilters.push(existing);
-      } else {
-        existing = { id: nextFilterId(), feature: key, mode: next, grade: 1 };
-        state.phoneticFilters.push(existing);
-      }
-      setState(next);
-      scheduleApplyFilters(true);
-    });
-    row.appendChild(button);
-    const desc = document.createElement('p');
-    desc.className = 'filter-desc';
-    desc.textContent =
-      type === 'group'
-        ? getGroupDescription(key) || meta.description || ''
-        : getFeatureDescriptionByMeta(phoneticMeta.get(key)) || meta.description || '';
-    row.appendChild(desc);
-    grid.appendChild(row);
-  });
-  container.appendChild(grid);
-  updateFilterPanels();
-  restore();
 }
 
 function getPopularityOptions(prefix) {
@@ -944,144 +727,6 @@ function getPopularityOptions(prefix) {
   });
   options.sort((a, b) => parsePeriodKey(b) - parsePeriodKey(a));
   return options;
-}
-
-function findPopularityByPrefix(prefix) {
-  return state.popularityFilters.find((f) => f.group.startsWith(prefix));
-}
-
-function setPopularitySelection(prefix, groupKey, mode) {
-  state.popularityFilters = state.popularityFilters.filter((f) => !f.group.startsWith(prefix));
-  if (!groupKey || mode === 'none') {
-    return;
-  }
-  state.popularityFilters.push({ id: nextGroupFilterId(), group: groupKey, mode });
-}
-
-function cycleTriState(current) {
-  const order = ['none', 'include', 'exclude'];
-  const idx = order.indexOf(current);
-  return order[(idx + 1) % order.length];
-}
-
-function renderPhoneticFilters() {
-  renderFeatureFilters();
-}
-
-function renderGroupFilters() {
-  renderFeatureFilters();
-}
-
-function renderPopularityFilters() {
-  const container = $('#popularity-filters');
-  if (!container) return;
-  const restore = preserveScroll(container);
-  container.innerHTML = '';
-  const rows = [
-    {
-      label: 'Suosion huipulla',
-      prefix: 'trend_',
-      desc: 'Nimet, joiden suosio on ollut huipussaan kyseisellä vuosikymmenellä.'
-    },
-    {
-      label: 'Kasvattanut suosiota',
-      prefix: 'growth_',
-      desc: 'Nimet, joiden suosio on kasvanut edelliseltä vuosikymmeneltä.'
-    },
-    {
-      label: 'Suosittu',
-      prefix: 'popular_',
-      desc: 'Kunkin vuosikymmenen 500 suosituinta nimeä'
-    }
-  ];
-  const createSelect = (prefix, options) => {
-    const select = document.createElement('select');
-    if (!options.length) {
-      const opt = document.createElement('option');
-      opt.value = '';
-      opt.textContent = 'Ei valintoja';
-      select.appendChild(opt);
-      return select;
-    }
-    options.forEach((key) => {
-      const option = document.createElement('option');
-      option.value = key;
-      option.textContent = getPeriodLabel(key);
-      select.appendChild(option);
-    });
-    return select;
-  };
-  rows.forEach((rowConfig) => {
-    const options = getPopularityOptions(rowConfig.prefix);
-    if (!options.length) return;
-    const row = document.createElement('div');
-    row.className = 'popularity-row';
-    const labelEl = document.createElement('div');
-    labelEl.textContent = rowConfig.label;
-    labelEl.className = 'filter-label-text';
-    row.appendChild(labelEl);
-    const select = createSelect(rowConfig.prefix, options);
-    row.appendChild(select);
-    const tri = document.createElement('button');
-    tri.type = 'button';
-    tri.className = 'ghost small tri-toggle';
-    const current = findPopularityByPrefix(rowConfig.prefix);
-    if (current) {
-      select.value = current.group;
-    }
-    const setState = (mode) => {
-      tri.dataset.state = mode;
-      tri.textContent = mode === 'include' ? '+ Vain nämä' : mode === 'exclude' ? '– Poista nämä' : '○ Ei käytössä';
-    };
-    setState(current ? current.mode : 'none');
-    tri.addEventListener('click', () => {
-      const next = cycleTriState(tri.dataset.state || 'none');
-      setPopularitySelection(rowConfig.prefix, select.value, next);
-      setState(next);
-      scheduleApplyFilters(true);
-    });
-    select.addEventListener('change', () => {
-      const mode = tri.dataset.state || 'none';
-      setPopularitySelection(rowConfig.prefix, select.value, mode);
-      scheduleApplyFilters(true);
-    });
-    row.appendChild(tri);
-    container.appendChild(row);
-    const desc = document.createElement('p');
-    desc.className = 'filter-desc';
-    desc.textContent = rowConfig.desc;
-    const descWrap = document.createElement('div');
-    descWrap.className = 'popularity-row-desc';
-    descWrap.appendChild(desc);
-    container.appendChild(descWrap);
-  });
-  updateFilterPanels();
-  restore();
-}
-
-function addPopularityFilter() {
-  const keys = getPopularityKeys();
-  if (!keys.length) return;
-  const firstKey = keys[0];
-  state.popularityFilters.push({ id: nextGroupFilterId(), group: firstKey, mode: 'include' });
-  renderPopularityFilters();
-  scheduleApplyFilters(true);
-}
-
-function addPhoneticFilter() {
-  const firstKey = data.schema.phoneticFeatures[0]?.key;
-  if (!firstKey) return;
-  state.phoneticFilters.push({ id: nextFilterId(), feature: firstKey, mode: 'include', grade: 1 });
-  renderPhoneticFilters();
-  scheduleApplyFilters(true);
-}
-
-function addGroupFilter() {
-  const firstKey = groupFilterKeys[0];
-  if (!firstKey) return;
-  state.groupFilters.push({ id: nextGroupFilterId(), group: firstKey, mode: 'include' });
-  renderGroupFilters();
-  scheduleApplyFilters(true);
 }
 
 function updateStateFromForm() {
@@ -1120,7 +765,7 @@ function applyFilters(skipFormSync = false) {
   filteredOutResults = [];
 
   data.names.forEach((entry) => {
-    const reasons = collectFilterFailures(entry);
+    const reasons = filters.collectFilterFailures(entry);
     entry._match = matchSurnameEntry
       ? computeMatchScore(entry, matchContext, activeWeights)
       : null;
@@ -1147,43 +792,8 @@ function applyFilters(skipFormSync = false) {
   currentResults = filtered;
   state.matchInfo = { surnameEntry: matchSurnameEntry, missingSurname };
   updateSurnameAnalysis(surnameResolution);
-  renderResults(restoreResultsScroll);
+  results.renderResults(restoreResultsScroll);
   persistFilterState();
-}
-
-
-function passesGroupFilters(entry) {
-  return getGroupFilterReasons(entry).length === 0;
-}
-
-function passesPopularityFilters(entry) {
-  return getPopularityFilterReasons(entry).length === 0;
-}
-
-function passesLetterFilters(entry) {
-  const name = (entry.name || entry.display || '').toLowerCase();
-  const nameCounts = buildCharCounts(name);
-  const includeTokens = parseLetterTokens(state.includeLettersInput);
-  const excludeTokens = parseLetterTokens(state.excludeLettersInput);
-  if (includeTokens.length && !includeTokens.some((token) => tokenPasses(name, nameCounts, token))) return false;
-  if (excludeTokens.length && excludeTokens.some((token) => tokenPasses(name, nameCounts, token))) return false;
-  return true;
-}
-
-function passesLengthFilters(entry) {
-  const length = Number(entry.metrics?.length ?? entry.display?.length ?? 0);
-  if (length < state.letterRange.min || length > state.letterRange.max) {
-    return false;
-  }
-  return true;
-}
-
-function passesPopulationFilter(entry) {
-  const total = Number(entry.popularity?.total ?? 0);
-  if (Number.isNaN(total)) return false;
-  if (total < state.populationRange.min) return false;
-  if (total > state.populationRange.max) return false;
-  return true;
 }
 
 function getActiveFilterChips() {
@@ -1197,7 +807,7 @@ function getActiveFilterChips() {
       text: `${label} (${modeText})`,
       remove: () => {
         state.popularityFilters = state.popularityFilters.filter((f) => f.id !== filter.id);
-        renderPopularityFilters();
+        filterUi.renderPopularityFilters();
         applyFilters(true);
       }
     });
@@ -1211,7 +821,7 @@ function getActiveFilterChips() {
       text: `${label} (${modeText})`,
       remove: () => {
         state.groupFilters = state.groupFilters.filter((f) => f.id !== filter.id);
-        renderFeatureFilters();
+        filterUi.renderFeatureFilters();
         applyFilters(true);
       }
     });
@@ -1225,7 +835,7 @@ function getActiveFilterChips() {
       text: `${label} (${descriptor})`,
       remove: () => {
         state.phoneticFilters = state.phoneticFilters.filter((f) => f.id !== filter.id);
-        renderFeatureFilters();
+        filterUi.renderFeatureFilters();
         applyFilters(true);
       }
     });
@@ -1285,331 +895,16 @@ function getActiveFilterChips() {
   return chips;
 }
 
-function collectFilterFailures(entry) {
-  const reasons = [];
-  if (!state.genders.has(entry.gender) && entry.gender !== 'unknown') {
-    reasons.push({
-      key: 'gender',
-      text: 'Sukupuolirajaus',
-      remove: null
-    });
-  }
-  const name = (entry.name || entry.display || '').toLowerCase();
-  const includeTokens = parseLetterTokens(state.includeLettersInput);
-  if (includeTokens.length) {
-    const nameCounts = buildCharCounts(name);
-    const satisfied = includeTokens.some((token) => tokenPasses(name, nameCounts, token));
-    if (!satisfied) {
-      reasons.push({
-        text: `Ei täytä: ${includeTokens.join(', ')}`,
-        remove: () => {
-          state.includeLettersInput = '';
-          const includeInput = $('#letters-include');
-          if (includeInput) includeInput.value = '';
-          applyFilters(true);
-        }
-      });
-    }
-  }
-  const excludeTokens = parseLetterTokens(state.excludeLettersInput);
-  if (excludeTokens.length) {
-    const nameCounts = buildCharCounts(name);
-    const present = excludeTokens.filter((token) => token && tokenPasses(name, nameCounts, token));
-    if (present.length) {
-      reasons.push({
-        text: `Kielletyt jaksot: ${present.join(', ')}`,
-        remove: () => {
-          state.excludeLettersInput = '';
-          const excludeInput = $('#letters-exclude');
-          if (excludeInput) excludeInput.value = '';
-          applyFilters(true);
-        }
-      });
-    }
-  }
-  const lengthValue = Number(entry.metrics?.length ?? entry.display?.length ?? 0);
-  if (lengthValue < state.letterRange.min || lengthValue > state.letterRange.max) {
-    reasons.push({
-      text: `Pituusraja ${state.letterRange.min}-${state.letterRange.max}`,
-      remove: () => {
-        state.letterRange = { ...LETTER_LIMITS };
-        lettersRangeControl?.setValues(LETTER_LIMITS.min, LETTER_LIMITS.max);
-        applyFilters(true);
-      }
-    });
-  }
-  const total = Number(entry.popularity?.total ?? 0);
-  if (Number.isNaN(total) || total < state.populationRange.min || total > state.populationRange.max) {
-    reasons.push({
-      text: 'Nimenhaltijoiden määrä rajattu',
-      remove: () => {
-        state.populationRange = { ...POPULATION_LIMITS };
-        updatePopulationInputs();
-        applyFilters(true);
-      }
-    });
-  }
-  reasons.push(...getGroupFilterReasons(entry));
-  reasons.push(...getPopularityFilterReasons(entry));
-  reasons.push(...getPhoneticFilterReasons(entry));
-  return reasons;
-}
-
-function getGroupFilterReasons(entry) {
-  if (!state.groupFilters.length) return [];
-  const reasons = [];
-  const groups = Array.isArray(entry.groups) ? entry.groups : [];
-  state.groupFilters.forEach((filter) => {
-    const hasGroup = groups.includes(filter.group);
-    const label = getGroupLabel(groupMeta.get(filter.group)) || filter.group;
-    if (filter.mode === 'include' && !hasGroup) {
-      reasons.push({
-        text: `Puuttuu ryhmä: ${label}`,
-        remove: () => {
-          state.groupFilters = state.groupFilters.filter((f) => f.id !== filter.id);
-          applyFilters(true);
-        }
-      });
-    }
-    if (filter.mode === 'exclude' && hasGroup) {
-      reasons.push({
-        text: `Poistettu ryhmän vuoksi: ${label}`,
-        remove: () => {
-          state.groupFilters = state.groupFilters.filter((f) => f.id !== filter.id);
-          applyFilters(true);
-        }
-      });
-    }
-  });
-  return reasons;
-}
-
-function getPopularityFilterReasons(entry) {
-  if (!state.popularityFilters.length) return [];
-  const reasons = [];
-  const groups = Array.isArray(entry.groups) ? entry.groups : [];
-  state.popularityFilters.forEach((filter) => {
-    const hasGroup = groups.includes(filter.group);
-    const label = formatPopularityLabel(filter.group);
-    if (filter.mode === 'include' && !hasGroup) {
-      reasons.push({
-        text: `Ei kuulu joukkoon: ${label}`,
-        remove: () => {
-          state.popularityFilters = state.popularityFilters.filter((f) => f.id !== filter.id);
-          applyFilters(true);
-        }
-      });
-    }
-    if (filter.mode === 'exclude' && hasGroup) {
-      reasons.push({
-        text: `Poistettu suosion vuoksi: ${label}`,
-        remove: () => {
-          state.popularityFilters = state.popularityFilters.filter((f) => f.id !== filter.id);
-          applyFilters(true);
-        }
-      });
-    }
-  });
-  return reasons;
-}
-
-function getPhoneticFilterReasons(entry) {
-  if (!state.phoneticFilters.length) return [];
-  const reasons = [];
-  state.phoneticFilters.forEach((filter) => {
-    const feature = entry.phonetic[filter.feature];
-    const label = getFeatureLabel(phoneticMeta.get(filter.feature)) || filter.feature;
-    const mode = filter.mode;
-    if (!feature) {
-        reasons.push({
-          text: `Ei tietoa: ${label}`,
-          remove: () => {
-            state.phoneticFilters = state.phoneticFilters.filter((f) => f.id !== filter.id);
-            applyFilters(true);
-          }
-        });
-      return;
-    }
-    if (mode === 'include') {
-      if (!feature.value) {
-        reasons.push({
-          text: `Puuttuu piirre: ${label}`,
-          remove: () => {
-            state.phoneticFilters = state.phoneticFilters.filter((f) => f.id !== filter.id);
-            applyFilters(true);
-          }
-        });
-      }
-    } else if (mode === 'exclude') {
-      if (feature.value) {
-        reasons.push({
-          text: `Suodatettu piirteen vuoksi: ${label}`,
-          remove: () => {
-            state.phoneticFilters = state.phoneticFilters.filter((f) => f.id !== filter.id);
-            applyFilters(true);
-          }
-        });
-      }
-    }
-  });
-  return reasons;
-}
-
-function passesPhoneticFilters(entry) {
-  return getPhoneticFilterReasons(entry).length === 0;
-}
-
 function sortResults(list) {
   const dir = state.sortDir === 'asc' ? 1 : -1;
   const metricKeys = new Set((data.schema.metrics || []).map((m) => m.key));
-  const periodRanks = new Map();
-  (data.schema.sorting || [])
-    .filter((option) => option.period)
-    .forEach((option) => {
-      periodRanks.set(option.key, option.period);
-    });
+  const periodRanks = buildPeriodRanks(data.schema);
   const missingSurname =
     state.matchInfo?.missingSurname
     ?? Boolean(state.surname && !surnameMap.get(state.surname.toLowerCase()));
   const activeSortKey =
     state.sortKey === 'match' && (!state.surname || missingSurname) ? 'popularity' : state.sortKey;
-  list.sort((a, b) => {
-    const aVal = getSortValue(a);
-    const bVal = getSortValue(b);
-    if (aVal === bVal) {
-      return a.display.localeCompare(b.display, 'fi');
-    }
-    return aVal > bVal ? dir : -dir;
-  });
-
-  function getSortValue(entry) {
-    if (activeSortKey === 'alpha') {
-      return entry.display;
-    }
-    if (activeSortKey === 'popularity') {
-      return entry.popularity.total;
-    }
-    if (activeSortKey === 'match') {
-      return entry._match ?? 0;
-    }
-    if (periodRanks.has(activeSortKey)) {
-      const period = periodRanks.get(activeSortKey);
-      const countValue = getPeriodCountValue(entry, period);
-      if (countValue != null) {
-        return countValue;
-      }
-      return getPeriodRankValue(entry, period);
-    }
-    if (metricKeys.has(activeSortKey)) {
-      return entry.metrics[activeSortKey];
-    }
-    if (activeSortKey.endsWith('_intensity')) {
-      const base = activeSortKey.replace('_intensity', '');
-      return entry.phonetic[base]?.intensity ?? 0;
-    }
-    return 0;
-  }
-}
-
-function getPeriodRankValue(entry, period) {
-  const ranks = entry.historyRanks;
-  if (!ranks) return 0;
-  const value = ranks[period];
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  return -value;
-}
-
-function getPeriodCountValue(entry, period) {
-  const countsMap = entry.historyCounts;
-  if (!countsMap) return null;
-  const value = countsMap[period];
-  if (value == null || Number.isNaN(value)) return null;
-  return Number(value);
-}
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function clampSigned(value) {
-  if (!Number.isFinite(value)) return 0;
-  return clamp(value, -1, 1);
-}
-
-function mapZeroOneToSigned(value) {
-  if (!Number.isFinite(value)) return 0;
-  return clamp(value * 2 - 1, -1, 1);
-}
-
-const SYLLABLE_SPLIT_REGEX = /[+-]+/;
-
-function splitSyllableMarkers(value = '') {
-  if (!value) return [];
-  return value.split(SYLLABLE_SPLIT_REGEX).filter(Boolean);
-}
-
-const NEUTRAL_VOWEL_GAP = 0.08;
-const CLOSE_VOWEL_PENALTY = { threshold: 0.65, strength: 0.6, exponent: 1.4 };
-
-function levenshteinDistance(a = '', b = '') {
-  const lenA = a.length;
-  const lenB = b.length;
-  if (!lenA) return lenB;
-  if (!lenB) return lenA;
-  const prev = new Array(lenB + 1);
-  const curr = new Array(lenB + 1);
-  for (let j = 0; j <= lenB; j += 1) {
-    prev[j] = j;
-  }
-  for (let i = 1; i <= lenA; i += 1) {
-    curr[0] = i;
-    for (let j = 1; j <= lenB; j += 1) {
-      if (a[i - 1] === b[j - 1]) {
-        curr[j] = prev[j - 1];
-      } else {
-        curr[j] = Math.min(prev[j - 1], prev[j], curr[j - 1]) + 1;
-      }
-    }
-    for (let j = 0; j <= lenB; j += 1) {
-      prev[j] = curr[j];
-    }
-  }
-  return prev[lenB];
-}
-
-function computeRhythmSimilarity(codeA, codeB) {
-  if (!codeA || !codeB) return 0;
-  const distance = levenshteinDistance(codeA, codeB);
-  const maxLen = Math.max(codeA.length, codeB.length) || 1;
-  const similarity = 1 - distance / maxLen;
-  return clamp(similarity, 0, 1);
-}
-
-function applyCloseVowelPenalty(score, metricsFirst, metricsLast) {
-  if (score <= 0) return score;
-  const closeFirst = metricsFirst.close_ratio ?? 0;
-  const closeLast = metricsLast.close_ratio ?? 0;
-  const avgClose = (closeFirst + closeLast) / 2;
-  const { threshold, strength, exponent } = CLOSE_VOWEL_PENALTY;
-  if (avgClose <= threshold) return score;
-  const intensity = Math.min(1, (avgClose - threshold) / Math.max(1e-6, 1 - threshold));
-  const penalty = Math.min(1, strength * Math.pow(intensity, exponent));
-  return clampSigned(score - penalty);
-}
-
-function computeCvSequencingScore(firstSimple, lastSimple) {
-  const firstProfile = buildCvTransitionProfile(firstSimple);
-  const lastProfile = buildCvTransitionProfile(lastSimple);
-  if (!firstProfile || !lastProfile) {
-    return 0;
-  }
-  const keys = ['cv', 'vc', 'cc', 'vv'];
-  let diff = 0;
-  keys.forEach((key) => {
-    diff += Math.abs((firstProfile[key] ?? 0) - (lastProfile[key] ?? 0));
-  });
-  const similarity = clamp(1 - diff / 2, 0, 1);
-  return mapZeroOneToSigned(similarity);
+  list.sort(createSortComparator({ activeSortKey, dir, periodRanks, metricKeys }));
 }
 
 function getActiveWeights() {
@@ -1640,179 +935,14 @@ function prepareMatchingWeights() {
   weightPercentBudget = computeAbsoluteWeightBudget(normalized) || 1;
 }
 
-function computeLengthBias(firstLength, lastLength) {
-  if (!Number.isFinite(firstLength) || !Number.isFinite(lastLength)) {
-    return 0;
-  }
-  const SHORT_LAST = 4;
-  const LONG_LAST = 8;
-  const MAX_BIAS = 0.15;
-
-  if (lastLength >= LONG_LAST) {
-    const diff = lastLength - firstLength; // positive when first is shorter
-    return clamp((diff / Math.max(lastLength, 1)) * 0.6, -MAX_BIAS, MAX_BIAS);
-  }
-  if (lastLength <= SHORT_LAST) {
-    const diff = firstLength - lastLength; // positive when first longer
-    return clamp((diff / Math.max(firstLength, 1)) * 0.6, -MAX_BIAS, MAX_BIAS);
-  }
-  return 0;
-}
-
-function endStartMatch(first, last, depth = 1) {
-  if (!first || !last) return 0;
-  const firstTail = first.slice(-depth);
-  const lastHead = last.slice(0, depth);
-  let score = 0;
-  const limit = Math.min(firstTail.length, lastHead.length);
-  for (let i = 0; i < limit; i += 1) {
-    if (firstTail[i] === lastHead[i]) {
-      score += 1;
-    }
-  }
-  return score / (depth || 1);
-}
-
-function evaluateMatchComponents(first, last) {
-  if (!matchingModel) {
-    return {
-      components: {},
-      weightedSum: 0,
-      normalized: 0
-    };
-  }
-  const weights = getActiveWeights();
-  const result = computeModelPairScore(first, last, weights, matchingModel);
-  if (!result) {
-    return { components: {}, weightedSum: 0, normalized: 0 };
-  }
-  return {
-    components: result.components || {},
-    weightedSum: result.weightedSum ?? 0,
-    normalized: Math.round((result.normalized ?? 0) * 1000) / 1000
-  };
-}
-
 function computeMatchScore(first, matchContext, weights) {
   const score = computeWeightedMatchScore(first, matchContext, weights, matchingModel);
   if (!Number.isFinite(score)) return null;
   return Math.round(score * 1000) / 1000;
 }
 
-function describeLetters(group) {
-  if (!group) return '';
-  return group
-    .split('')
-    .filter((c, idx, arr) => arr.indexOf(c) === idx)
-    .join('/');
-}
-
-function describeRhythmPattern(pat) {
-  if (!pat) return '';
-  return pat
-    .split('')
-    .map((c) => (c === 'R' ? 'pitkän kuuloinen tavu' : 'lyhyen kuuloinen tavu'))
-    .join(' – ');
-}
-
-function describeComponentForName(component, buckets, weights) {
-  const firstDesc = (key) => friendlyBucket(component, buckets[`${component}_${key}`], key).phrase;
-  switch (component) {
-    case 'vowel_location':
-    case 'vowel_openess':
-      return `Etunimen ja sukunimen vokaalit ovat samantyyppisiä (${firstDesc('obs')} / ${firstDesc('cond')}), joten nimi soljuu luontevasti.`;
-    case 'softness':
-      return `Etunimen ja sukunimen konsonantit ovat samassa pehmeysskaalassa (${firstDesc('obs')} / ${firstDesc('cond')}), mikä kuulostaa miellyttävältä.`;
-    case 'tone':
-      return `Nimessä on samansävyinen sointi (${firstDesc('obs')} / ${firstDesc('cond')}), joten kokonaisuus ei riitele.`;
-    case 'syllables': {
-      const fo = buckets.syllables_obs;
-      const so = buckets.syllables_cond;
-      return `Etunimessä on ${fo} tavua ja sukunimessä ${so} tavua – pituudet tukevat toisiaan.`;
-    }
-    case 'length': {
-      const fo = buckets.length_obs;
-      const so = buckets.length_cond;
-      return `Etunimen (${fo}) ja sukunimen (${so}) kirjainmäärä on tasapainossa.`;
-    }
-    case 'rhythm': {
-      const fo = describeRhythmPattern(buckets.rhythm_obs);
-      const so = describeRhythmPattern(buckets.rhythm_cond);
-      return `Etunimen ja sukunimen tavurytmi muistuttavat toisiaan (${fo || 'tasainen'} / ${so || 'tasainen'}), mikä tekee nimestä sujuvan.`;
-    }
-    case 'head_transition': {
-      const cond = describeLetters(buckets.head_transition_cond);
-      return `Sukunimi alkaa äänteellä ${cond}. Etunimen aloitus sopii luontevasti samaan alkusointiin.`;
-    }
-    case 'end_start_transition': {
-      const cond = describeLetters(buckets.end_start_transition_cond);
-      return `Etunimen loppu ja sukunimen alku kohtaavat pehmeästi (sukunimi alkaa ${cond}).`;
-    }
-    default:
-      return '';
-  }
-}
-
-function buildMatchHighlights(entry, surnameEntry) {
-  if (!surnameEntry || !matchingModel) return [];
-  const weights = getActiveWeights();
-  const result = computeModelPairScore(entry, surnameEntry, weights, matchingModel);
-  if (!result) return [];
-  const buckets = computeBuckets(entry, surnameEntry);
-  const items = [];
-  Object.entries(result.components || {}).forEach(([key, value]) => {
-    const weight = weights[key];
-    if (weight == null) return;
-    const signed = key === 'alliteration' || key === 'oddness' ? value : mapZeroOneToSigned(value);
-    const contrib = signed * weight;
-    if (contrib <= 0) return;
-    const text = describeComponentForName(key, buckets, weights);
-    if (text) {
-      items.push({ key, contrib, text });
-    }
-  });
-  items.sort((a, b) => Math.abs(b.contrib) - Math.abs(a.contrib));
-  return items.slice(0, 5).map((item) => item.text);
-}
-function renderSurnameExplainLink(entry) {
-  let link = document.getElementById('surname-explain-link');
-  if (!entry) {
-    if (link) link.remove();
-    return;
-  }
-  const container = document.getElementById('surname-analysis');
-  if (!container) return;
-  if (!link) {
-    return;
-  } else {
-    link.remove();
-  }
-}
-
-function openSurnameExplain(entry) {
-  if (!surnameExplainModal || !entry) return;
-  const content = document.getElementById('surname-explain-content');
-  if (!content || !matchingModel) return;
-  content.innerHTML = '';
-  const explanations = buildExplanation(entry, 'last', matchingModel);
-  explanations.forEach((item) => {
-    const card = document.createElement('div');
-    card.className = 'card';
-    const h = document.createElement('h3');
-    h.textContent = item.label;
-    const p = document.createElement('p');
-    p.textContent = item.text;
-    card.appendChild(h);
-    card.appendChild(p);
-    content.appendChild(card);
-  });
-  surnameExplainModal.hidden = false;
-  document.body.classList.add('modal-open');
-}
-
-
 function initWeightEditor() {
-  if (weightEditorControls || !document) return;
+  if (weightEditor || !document) return;
   const trigger = $('#edit-weight-button');
   const modal = $('#weight-editor');
   if (!trigger || !modal) return;
@@ -1826,60 +956,85 @@ function initWeightEditor() {
       });
     }
   }
-  weightEditorControls = {
-    trigger,
+  const refs = {
     modal,
     list: $('#weight-editor-list'),
     total: $('#weight-editor-total'),
     remaining: $('#weight-editor-remaining'),
     error: $('#weight-editor-error'),
-    save: $('#weight-editor-save'),
-    description: $('#weight-editor-description'),
-    title: $('#weight-editor-title'),
+    save: $('#weight-editor-save')
+  };
+  const textRefs = {
     eyebrow: $('#weight-editor-eyebrow'),
+    title: $('#weight-editor-title'),
+    description: $('#weight-editor-description'),
     reset: modal.querySelector('[data-action="reset-weight-editor"]'),
     cancel: modal.querySelector('[data-action="cancel-weight-editor"]')
   };
-  trigger.addEventListener('click', () => openWeightEditor());
-  modal.querySelectorAll('[data-action="dismiss-weight-editor"]').forEach((el) => {
-    el.addEventListener('click', () => closeWeightEditor());
-  });
-  weightEditorControls.cancel?.addEventListener('click', () => closeWeightEditor());
-  weightEditorControls.reset?.addEventListener('click', () =>
-    renderWeightEditorRows(null, defaultMatchingWeights)
-  );
-  weightEditorControls.save?.addEventListener('click', applyWeightEditorChanges);
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && isWeightEditorOpen()) {
-      event.preventDefault();
-      closeWeightEditor();
+  const locale = translations.fi.weightEditor;
+  weightEditor = createWeightEditor({
+    refs,
+    tolerance: WEIGHT_SUM_TOLERANCE,
+    getWeights: getActiveWeights,
+    getBudget: () => weightPercentBudget,
+    toggleNoteOnInput: true,
+    strings: {
+      totalText: (total) => locale.total(total),
+      balanceText: (balance) => locale.balance(balance),
+      invalidText: locale.invalid,
+      absRequirementText: locale.absRequirement,
+      penaltyNote: locale.penaltyNote
+    },
+    traitProvider: () => {
+      const surnameEntry = state.matchInfo?.surnameEntry;
+      const typedSurname = getTypedSurname();
+      const resolvedSurname =
+        !surnameEntry && typedSurname ? resolveSurnameEntry(surnameMap, typedSurname) : null;
+      const traitEntries = buildSurnameTraitSentences(
+        surnameEntry || resolvedSurname?.matchEntry,
+        'stats',
+        'surname',
+        typedSurname
+      );
+      return new Map(traitEntries.map((item) => [item.key, item.text]));
+    },
+    syncTexts: () => {
+      if (locale.eyebrow && textRefs.eyebrow) textRefs.eyebrow.textContent = locale.eyebrow;
+      if (locale.title && textRefs.title) textRefs.title.textContent = locale.title;
+      if (locale.description && textRefs.description) textRefs.description.textContent = locale.description;
+      if (locale.resetLabel && textRefs.reset) textRefs.reset.textContent = locale.resetLabel;
+      if (locale.cancelLabel && textRefs.cancel) textRefs.cancel.textContent = locale.cancelLabel;
+      if (locale.confirmLabel && refs.save) refs.save.textContent = locale.confirmLabel;
+    },
+    onClose: updateModalOpenState,
+    getApplyBase: () => ({ ...(defaultMatchingWeights || data?.schema?.matching?.weights || {}) }),
+    onApply: (normalized, base) => {
+      const isSame = areWeightsEqual(normalized, base);
+      state.weightOverrides = isSame ? null : normalized;
+      weightPercentBudget = computeAbsoluteWeightBudget(getActiveWeights()) || 1;
+      persistSharedWeights(state.weightOverrides, defaultMatchingWeights);
+      weightEditor.close();
+      applyFilters();
     }
   });
-  syncWeightEditorTexts();
-}
-
-function isWeightEditorOpen() {
-  return Boolean(weightEditorControls && weightEditorControls.modal && !weightEditorControls.modal.hidden);
+  trigger.addEventListener('click', () => weightEditor.open());
+  modal.querySelectorAll('[data-action="dismiss-weight-editor"]').forEach((el) => {
+    el.addEventListener('click', () => weightEditor.close());
+  });
+  textRefs.cancel?.addEventListener('click', () => weightEditor.close());
+  textRefs.reset?.addEventListener('click', () => weightEditor.render(null, defaultMatchingWeights));
+  refs.save?.addEventListener('click', () => weightEditor.applyChanges());
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && weightEditor.isOpen()) {
+      event.preventDefault();
+      weightEditor.close();
+    }
+  });
 }
 
 function updateModalOpenState() {
   const anyOpen = Boolean(document.querySelector('.modal[data-app-modal="true"]:not([hidden])'));
   document.body.classList.toggle('modal-open', anyOpen);
-}
-
-function openWeightEditor(prefillMap) {
-  if (!weightEditorControls) return;
-  renderWeightEditorRows(prefillMap);
-  syncWeightEditorTexts();
-  weightEditorControls.modal.hidden = false;
-  document.body.classList.add('modal-open');
-}
-
-function closeWeightEditor() {
-  if (!weightEditorControls) return;
-  weightEditorControls.modal.hidden = true;
-  updateModalOpenState();
-  weightEditorInputs = [];
 }
 
 function openStoryModal() {
@@ -1908,197 +1063,6 @@ function closeRecommendationHintModal() {
   if (!modal) return;
   modal.hidden = true;
   updateModalOpenState();
-}
-
-function renderWeightEditorRows(prefillValues, sourceWeights) {
-  if (!weightEditorControls?.list) return;
-  const weights = sourceWeights || getActiveWeights();
-  const localeLabels = translations.fi?.weightEditor;
-  const surnameEntry = state.matchInfo?.surnameEntry;
-  const typedSurname = getTypedSurname();
-  const resolvedSurname =
-    !surnameEntry && typedSurname ? resolveSurnameEntry(surnameMap, typedSurname) : null;
-  const traitEntries = buildSurnameTraitSentences(
-    surnameEntry || resolvedSurname?.matchEntry,
-    'stats',
-    'surname',
-    typedSurname
-  );
-  const traitMap = new Map(traitEntries.map((item) => [item.key, item.text]));
-  weightEditorControls.list.innerHTML = '';
-  weightEditorInputs = [];
-  MATCH_WEIGHT_FIELDS.forEach((meta) => {
-    const row = document.createElement('div');
-    row.className = 'weight-row';
-    const header = document.createElement('div');
-    header.className = 'weight-row-header';
-
-    const legendWrap = document.createElement('div');
-    const labelEl = document.createElement('div');
-    labelEl.className = 'weight-row-label';
-    labelEl.textContent = meta.label;
-    legendWrap.appendChild(labelEl);
-    const descEl = document.createElement('p');
-    descEl.className = 'weight-row-description';
-    descEl.textContent = meta.description;
-    legendWrap.appendChild(descEl);
-    if (traitMap.has(meta.key)) {
-      const traitEl = document.createElement('p');
-      traitEl.className = 'weight-row-trait';
-      traitEl.textContent = traitMap.get(meta.key);
-      legendWrap.appendChild(traitEl);
-    }
-    header.appendChild(legendWrap);
-
-    const inputWrap = document.createElement('div');
-    inputWrap.className = 'weight-row-input';
-    const inputEl = document.createElement('input');
-    inputEl.type = 'number';
-    inputEl.min = '-100';
-    inputEl.max = '100';
-    inputEl.step = '5';
-    inputEl.inputMode = 'numeric';
-    inputEl.dataset.key = meta.key;
-    const valueString =
-      prefillValues && prefillValues.has(meta.key)
-        ? prefillValues.get(meta.key)
-        : formatPercentNumber(weightToPercent(weights[meta.key] ?? 0, weightPercentBudget));
-    inputEl.value = valueString;
-    inputEl.addEventListener('input', handleWeightInputChange);
-    inputWrap.appendChild(inputEl);
-    const suffix = document.createElement('span');
-    suffix.textContent = '%';
-    inputWrap.appendChild(suffix);
-    header.appendChild(inputWrap);
-    row.appendChild(header);
-    weightEditorControls.list.appendChild(row);
-    weightEditorInputs.push({ key: meta.key, input: inputEl, row });
-
-    const numericValue = Number.parseFloat(valueString);
-    if (localeLabels?.penaltyNote && Number.isFinite(numericValue) && numericValue < 0) {
-      const note = document.createElement('p');
-      note.className = 'weight-row-note';
-      note.textContent = localeLabels.penaltyNote;
-      row.appendChild(note);
-    }
-  });
-  updateWeightEditorTotals();
-}
-
-function handleWeightInputChange(event) {
-  const target = event.target;
-  updateWeightEditorTotals();
-  const entry = weightEditorInputs.find((item) => item.input === target);
-  if (!entry) return;
-  const value = Number.parseFloat(target.value);
-  const note = entry.row.querySelector('.weight-row-note');
-  const editorStrings = translations.fi?.weightEditor;
-  if (Number.isFinite(value) && value < 0) {
-    if (!note && editorStrings?.penaltyNote) {
-      const noteEl = document.createElement('p');
-      noteEl.className = 'weight-row-note';
-      noteEl.textContent = editorStrings.penaltyNote;
-      entry.row.appendChild(noteEl);
-    }
-  } else if (note) {
-    note.remove();
-  }
-}
-
-function updateWeightEditorTotals() {
-  if (!weightEditorControls) return;
-  const locale = translations.fi?.weightEditor;
-  let total = 0;
-  let hasInvalid = false;
-  weightEditorInputs.forEach((item) => {
-    const value = Number.parseFloat(item.input.value);
-    if (!Number.isFinite(value)) {
-      hasInvalid = true;
-      item.input.classList.add('invalid');
-      return;
-    }
-    item.input.classList.remove('invalid');
-    total += Math.abs(value);
-  });
-  total = Math.round(total * 10) / 10;
-  const balance = Math.round((100 - total) * 10) / 10;
-  if (weightEditorControls.total) {
-    weightEditorControls.total.textContent = locale?.total
-      ? locale.total(total)
-      : `Yhteensä ${total.toFixed(1)}% / 100%`;
-  }
-  if (weightEditorControls.remaining) {
-    if (locale?.balance) {
-      weightEditorControls.remaining.textContent = locale.balance(balance);
-    } else {
-      weightEditorControls.remaining.textContent =
-        balance > 0
-          ? `${balance.toFixed(1)}% jäljellä`
-          : balance < 0
-            ? `${Math.abs(balance).toFixed(1)}% yli`
-            : 'Tasapainossa';
-    }
-  }
-  const needsAdjustment = Math.abs(balance) > WEIGHT_SUM_TOLERANCE;
-  let error = '';
-  if (hasInvalid) {
-    error = locale?.invalid || 'Täytä jokainen kenttä.';
-  } else if (needsAdjustment) {
-    error = locale?.absRequirement || 'Painojen itseisarvojen summan tulee olla 100 %.';
-  }
-  if (weightEditorControls.error) {
-    weightEditorControls.error.textContent = error;
-  }
-  if (weightEditorControls.save) {
-    weightEditorControls.save.disabled = hasInvalid || needsAdjustment;
-  }
-}
-
-function applyWeightEditorChanges() {
-  if (!weightEditorControls?.save || weightEditorControls.save.disabled) return;
-  const baseWeights = { ...(defaultMatchingWeights || data?.schema?.matching?.weights || {}) };
-  const updated = { ...baseWeights };
-  weightEditorInputs.forEach((item) => {
-    const value = Number.parseFloat(item.input.value);
-    if (!Number.isFinite(value)) {
-      return;
-    }
-    updated[item.key] = percentToWeight(value, weightPercentBudget);
-  });
-  const normalizedUpdate = normalizeWeightMap(updated);
-  const isSame = areWeightsEqual(normalizedUpdate, baseWeights);
-  state.weightOverrides = isSame ? null : normalizedUpdate;
-  weightPercentBudget = computeAbsoluteWeightBudget(getActiveWeights()) || 1;
-  persistSharedWeights(state.weightOverrides, defaultMatchingWeights);
-  closeWeightEditor();
-  applyFilters();
-}
-
-function syncWeightEditorTexts() {
-  if (!weightEditorControls) return;
-  const locale = translations.fi?.weightEditor;
-  if (locale?.eyebrow && weightEditorControls.eyebrow) {
-    weightEditorControls.eyebrow.textContent = locale.eyebrow;
-  }
-  if (locale?.title && weightEditorControls.title) {
-    weightEditorControls.title.textContent = locale.title;
-  }
-  if (locale?.description && weightEditorControls.description) {
-    weightEditorControls.description.textContent = locale.description;
-  }
-  if (locale?.resetLabel && weightEditorControls.reset) {
-    weightEditorControls.reset.textContent = locale.resetLabel;
-  }
-  if (locale?.cancelLabel && weightEditorControls.cancel) {
-    weightEditorControls.cancel.textContent = locale.cancelLabel;
-  }
-  if (locale?.confirmLabel && weightEditorControls.save) {
-    weightEditorControls.save.textContent = locale.confirmLabel;
-  }
-  if (isWeightEditorOpen()) {
-    const existingValues = new Map(weightEditorInputs.map((entry) => [entry.key, entry.input.value]));
-    renderWeightEditorRows(existingValues);
-  }
 }
 
 function updateRecommendationHintVisibility(chips) {
@@ -2140,203 +1104,8 @@ function renderActiveFilters() {
   restore();
 }
 
-function createNameCard(entry, t, surnameEntry, { filtered = false } = {}) {
-  return createCardShell(entry, {
-    t,
-    surnameEntry,
-    filtered,
-    isFavorite: () => isFavoriteName(entry.name),
-    toggleFavorite: toggleFavoriteName,
-    onOpen: (detailsEl, bodyEl) =>
-      cardDetailLoader?.(detailsEl, bodyEl, entry, { surnameEntry })
-  });
-}
-
 function shouldShowDetailAd() {
   return detailAds.shouldShow();
-}
-
-function createFilteredGroupPlaceholder(filteredEntries, t, surnameEntry, blockId) {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'filtered-divider';
-  if (blockId) {
-    wrapper.dataset.blockId = blockId;
-  }
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'ghost small filtered-toggle';
-  if (!filteredEntries.length) {
-    button.textContent = 'Suodatetut nimet on piilotettu';
-  } else {
-    button.textContent = `${filteredEntries.length} nimeä suodatettu, klikkaa näyttääksesi`;
-    button.addEventListener('click', () => {
-      expandedFilteredBlocks.add(blockId);
-      renderResults();
-    });
-  }
-  wrapper.appendChild(button);
-  return wrapper;
-}
-
-function scrollFilteredPlaceholderIntoView(blockId, previousTop) {
-  if (!blockId || previousTop == null) return;
-  requestAnimationFrame(() => {
-    const placeholder = document.querySelector(
-      `.filtered-divider[data-block-id="${blockId}"] .filtered-toggle`
-    );
-    if (!placeholder) return;
-    const newTop = placeholder.getBoundingClientRect().top;
-    window.scrollBy({ top: newTop - previousTop });
-  });
-}
-
-function createExpandedFilteredGroup(filteredEntries, t, surnameEntry, blockId) {
-  const expanded = document.createElement('div');
-  expanded.className = 'filtered-expanded';
-  if (blockId) {
-    expanded.dataset.blockId = blockId;
-  }
-  const makeCollapse = () => {
-    const collapse = document.createElement('button');
-    collapse.type = 'button';
-    collapse.className = 'ghost small filtered-toggle';
-    collapse.textContent = 'Piilota suodatetut nimet';
-    collapse.addEventListener('click', () => {
-      const previousTop = collapse.getBoundingClientRect().top;
-      expandedFilteredBlocks.delete(blockId);
-      renderResults();
-      scrollFilteredPlaceholderIntoView(blockId, previousTop);
-    });
-    return collapse;
-  };
-  expanded.appendChild(makeCollapse());
-
-  const listContainer = document.createElement('div');
-  listContainer.className = 'filtered-chunk';
-  expanded.appendChild(listContainer);
-  expanded.appendChild(makeCollapse());
-
-  return { expanded, listContainer };
-}
-
-function renderResults(restoreResultsScroll) {
-  const t = translations.fi;
-  const list = $('#results-list');
-  const { surnameEntry, missingSurname } = state.matchInfo;
-  const displayableTotal = getDisplayableCount();
-  const totalUnfiltered = currentResults.length;
-  setAdSlotsEnabled('results', displayableTotal > 0);
-  list.innerHTML = '';
-  let renderedCount = 0;
-  let renderedUnfiltered = 0;
-  let expandedAvailableCount = 0;
-  let usedSlots = 0;
-  let filteredBlockCounter = 0;
-  const activeBlockIds = new Set();
-  let hitVisibleLimit = false;
-  if (!displayableTotal && !totalUnfiltered) {
-    list.innerHTML = `<p class="hint">${t.noResults}</p>`;
-  } else {
-    let filteredBuffer = [];
-    let bufferStartIndex = null;
-    const flushFilteredBuffer = () => {
-      if (!filteredBuffer.length) return;
-      const blockId = `filtered-${bufferStartIndex ?? filteredBlockCounter}`;
-      filteredBlockCounter += 1;
-      activeBlockIds.add(blockId);
-      const isExpanded = expandedFilteredBlocks.has(blockId);
-      if (isExpanded) {
-        expandedAvailableCount += filteredBuffer.length;
-        const { expanded, listContainer } = createExpandedFilteredGroup(
-          filteredBuffer,
-          t,
-          surnameEntry,
-          blockId
-        );
-        list.appendChild(expanded);
-        for (const entry of filteredBuffer) {
-          if (usedSlots >= state.visibleCount) {
-            hitVisibleLimit = true;
-            break;
-          }
-          const card = createNameCard(entry, t, surnameEntry, { filtered: true });
-          listContainer.appendChild(card);
-          usedSlots += 1;
-          renderedCount += 1;
-        }
-      } else {
-        const placeholder = createFilteredGroupPlaceholder(filteredBuffer, t, surnameEntry, blockId);
-        list.appendChild(placeholder);
-      }
-      filteredBuffer = [];
-      bufferStartIndex = null;
-    };
-    for (let idx = 0; idx < orderedResults.length; idx += 1) {
-      if ((usedSlots >= state.visibleCount && filteredBuffer.length === 0) || hitVisibleLimit) {
-        break;
-      }
-      const entry = orderedResults[idx];
-      const isFiltered = entry._filteredReasons?.length;
-      const hasGenderBlock = entry._filteredReasons?.some((r) => r.key === 'gender');
-      if (isFiltered) {
-        if (hasGenderBlock) {
-          continue;
-        }
-        if (!filteredBuffer.length) {
-          bufferStartIndex = idx;
-        }
-        filteredBuffer.push(entry);
-        continue;
-      }
-      flushFilteredBuffer();
-      if (hitVisibleLimit || usedSlots >= state.visibleCount) {
-        break;
-      }
-      const card = createNameCard(entry, t, surnameEntry, { filtered: false });
-      list.appendChild(card);
-      usedSlots += 1;
-      renderedCount += 1;
-      renderedUnfiltered += 1;
-    }
-    if (!hitVisibleLimit) {
-      flushFilteredBuffer();
-    }
-  }
-  Array.from(expandedFilteredBlocks).forEach((id) => {
-    if (!activeBlockIds.has(id)) {
-      expandedFilteredBlocks.delete(id);
-    }
-  });
-  const shownCount = Math.min(renderedUnfiltered, totalUnfiltered);
-  $('#result-count').textContent = totalUnfiltered
-    ? t.results(1, shownCount, totalUnfiltered)
-    : t.noResults;
-  const typedSurname = getTypedSurname();
-  const surnameLabel = typedSurname || state.surname || '';
-  $('#match-context').textContent = missingSurname
-    ? translations.fi.missingSurname(surnameLabel)
-    : translations.fi.match(surnameLabel || (surnameEntry?.display ?? ''));
-  renderActiveFilters();
-  const loadMoreBtn = $('#load-more');
-  if (loadMoreBtn) {
-    const totalRenderable = totalUnfiltered + expandedAvailableCount;
-    const hasMore = usedSlots < totalRenderable;
-    loadMoreBtn.disabled = !hasMore;
-    loadMoreBtn.hidden = totalRenderable === 0;
-    loadMoreBtn.textContent = hasMore ? 'Näytä lisää nimiä' : 'Ei enempää nimiä';
-  }
-  restoreResultsScroll?.();
-}
-
-function formatPercent(value) {
-  if (!value) {
-    return '0%';
-  }
-  const percent = value * 100;
-  if (percent >= 0.01) {
-    return `${percent.toFixed(2)}%`;
-  }
-  return `${percent.toFixed(4)}%`;
 }
 
 function formatNumberWithSpaces(value) {
@@ -2345,240 +1114,6 @@ function formatNumberWithSpaces(value) {
   }
   const rounded = Math.round(value);
   return rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-}
-
-function formatPercentShort(value) {
-  if (!Number.isFinite(value)) {
-    return '0%';
-  }
-  return `${Math.round(value * 100)}%`;
-}
-
-function formatSurnameQuote(name) {
-  if (!name) return '';
-  return `“${name}”`;
-}
-
-function buildSurnameTraitSentences(entry, mode = 'analysis', role = 'surname', overrideName = null) {
-  if (!entry) return [];
-  const metrics = entry.metrics || {};
-  const simple = entry.ipa?.simple || entry.display || entry.name || '';
-  const context = {
-    entry,
-    metrics,
-    name: overrideName || entry.display || entry.name || '',
-    mode,
-    simple,
-    role
-  };
-  const results = [];
-  const builders = [
-    { key: 'vowel_location', fn: describeVowelLocationTrait },
-    { key: 'vowel_openess', fn: describeVowelOpennessTrait },
-    { key: 'softness', fn: describeSoftnessTrait },
-    { key: 'tone', fn: describeToneTrait },
-    { key: 'rhythm', fn: describeRhythmicPatternTrait },
-    { key: 'length', fn: describeLengthTrait }
-  ];
-  builders.forEach(({ key, fn }) => {
-    const text = fn(context);
-    if (text) {
-      results.push({ key, text });
-    }
-  });
-  return results;
-}
-
-function describeVowelLocationTrait({ metrics, name, mode, role }) {
-  const front = metrics.front_ratio ?? 0;
-  const back = metrics.back_ratio ?? 0;
-  if (front <= 0 && back <= 0) return '';
-  const frontPct = formatPercentShort(front);
-  const backPct = formatPercentShort(back);
-  const quoted = formatSurnameQuote(name);
-  const hasName = Boolean(quoted);
-  const roleName = role === 'first' ? 'Etunimi' : 'Sukunimi';
-  const partnerName = role === 'first' ? 'sukunimet' : 'etunimet';
-  if (mode === 'analysis') {
-    if (front > back + 0.08) {
-      return `${roleName} on etuvokaalinen (ä/ö/y), joten etuvokaalipainotteiset ${partnerName} kuulostavat luontevammilta.`;
-    }
-    if (back > front + 0.08) {
-      return `${roleName} on takavokaalinen (a/o/u), joten takavokaalipainotteiset ${partnerName} kuulostavat luontevammilta.`;
-    }
-    return '';
-  }
-  if (front > back + 0.08) {
-    return hasName
-      ? `Sukunimessä ${quoted} korostuvat etuvokaalit (ä/ö/y) ${frontPct}.`
-      : `Etuvokaalit (ä/ö/y) korostuvat ${frontPct}.`;
-  }
-  if (back > front + 0.08) {
-    return hasName
-      ? `Sukunimessä ${quoted} painottuvat takavokaalit (a/o/u) ${backPct}.`
-      : `Takavokaalit (a/o/u) painottuvat ${backPct}.`;
-  }
-  return '';
-}
-
-function describeVowelOpennessTrait({ metrics, name, mode, role }) {
-  const open = metrics.open_ratio ?? 0;
-  const close = metrics.close_ratio ?? 0;
-  if (open <= 0 && close <= 0) return '';
-  const openPct = formatPercentShort(open);
-  const closePct = formatPercentShort(close);
-  const quoted = formatSurnameQuote(name);
-  const hasName = Boolean(quoted);
-  const roleName = role === 'first' ? 'Etunimessä' : 'Sukunimessä';
-  const partnerName = role === 'first' ? 'sukunimessä' : 'etunimessä';
-  if (mode === 'analysis') {
-    if (open > close + NEUTRAL_VOWEL_GAP) {
-      return `${roleName} on väljiä vokaaleja (a/e/o), joten nämä vokaalit kuulostavat hyviltä myös ${partnerName}.`;
-    }
-    if (close > open + NEUTRAL_VOWEL_GAP) {
-      return `${roleName} on suppeita vokaaleja (i/u/y), joten nämä vokaalit kuulostavat hyviltä myös ${partnerName}.`;
-    }
-    return '';
-  }
-  if (open > close + NEUTRAL_VOWEL_GAP) {
-    return hasName
-      ? `Sukunimessä ${quoted} väljät vokaalit (a/e/o) hallitsevat ${openPct}.`
-      : `Väljät vokaalit (a/e/o) hallitsevat ${openPct}.`;
-  }
-  if (close > open + NEUTRAL_VOWEL_GAP) {
-    return hasName
-      ? `Sukunimessä ${quoted} suppeat vokaalit (i/u/y) hallitsevat ${closePct}.`
-      : `Suppeat vokaalit (i/u/y) hallitsevat ${closePct}.`;
-  }
-  return hasName
-    ? `Sukunimessä ${quoted} vokaalien avaruus on tasainen (väljiä ${openPct}, suppeita ${closePct}).`
-    : `Vokaalien avaruus on tasainen (väljiä ${openPct}, suppeita ${closePct}).`;
-}
-
-function describeSoftnessTrait({ metrics, name, mode, role }) {
-  const soft = metrics.soft_ratio ?? 0;
-  if (soft <= 0) return '';
-  const softPct = formatPercentShort(soft);
-  const hardPct = formatPercentShort(Math.max(0, 1 - soft));
-  const quoted = formatSurnameQuote(name);
-  const hasName = Boolean(quoted);
-  if (mode === 'analysis') {
-    const roleName = role === 'first' ? 'Etunimi' : 'Sukunimi';
-    const partnerName = role === 'first' ? 'sukunimessä' : 'etunimessä';
-    if (soft > 0.6) {
-      return `Pehmeät konsonantit (m/n/l/r/j) hallitsevat, joten suosi samoja konsonantteja myös ${partnerName}.`;
-    }
-    if (soft < 0.4) {
-      return `Kovat konsonantit (p/t/k/b/d) hallitsevat, joten suosi samoja konsonatteja myös ${partnerName}.`;
-    }
-    return '';
-  }
-  return hasName
-    ? `Sukunimessä ${quoted} on pehmeitä konsonanttiäänteitä (m/n/l/r/j) on ${softPct} ja kovia ${hardPct}.`
-    : `Pehmeitä konsonanttiäänteitä (m/n/l/r/j) on ${softPct} ja kovia ${hardPct}.`;
-}
-
-function describeToneTrait({ metrics, name, mode, role }) {
-  if (metrics.valence == null) return '';
-  const tone = clampSigned(metrics.valence);
-  const pct = `${Math.round(Math.abs(tone) * 100)} %`;
-  const quoted = formatSurnameQuote(name);
-  const hasName = Boolean(quoted);
-  if (mode === 'analysis') {
-    const roleName = role === 'first' ? 'Etunimessä' : 'Sukunimessä';
-    const partnerName = role === 'first' ? 'sukunimessä' : 'etunimessä';
-    if (Math.abs(tone) < 0.1) {
-      return '';
-    }
-    if (tone > 0) {
-      return `${roleName} on terävän kuuloisia kirjaimia (k/t/s/p/i), joten suosi samoja kirjaimia ${partnerName}.`;
-    }
-    return `${roleName} on lämpimän kuuloisia kirjaimia (u/o/m/a/n), joten suosi samoja kirjaimia ${partnerName}.`;
-  }
-  if (Math.abs(tone) < 0.1) {
-    return hasName
-      ? `Sukunimen ${quoted} sävy pysyy neutraalina.`
-      : 'Sävy pysyy neutraalina.';
-  }
-  if (tone > 0) {
-    return hasName
-      ? `Sukunimen ${quoted} sävy on ${pct} kirkas ja sähäkkä.`
-      : `Sävy on ${pct} kirkas ja sähäkkä.`;
-  }
-  return hasName
-    ? `Sukunimen ${quoted} sävy on ${pct} rauhallinen ja lämmin.`
-    : `Sävy on ${pct} rauhallinen ja lämmin.`;
-}
-
-const MATCH_COMPONENT_ORDER = [
-  'vowel_location',
-  'vowel_openess',
-  'softness',
-  'tone',
-  'rhythm',
-  'length',
-  'alliteration',
-  'head_transition',
-  'end_start_transition',
-  'oddness'
-];
-
-function convertRhythmPatternToRK(pattern = '') {
-  if (!pattern) return '';
-  return pattern.replace(/H/g, 'R').replace(/L/g, 'K');
-}
-
-function describeRhythmicPatternTrait({ entry, name, mode, role }) {
-  const pattern = entry?.rhythm_sequence;
-  if (!pattern) return '';
-  const roleName = role === 'first' ? 'Etunimi' : 'Sukunimi';
-  const partnerName = role === 'first' ? 'sukunimessä' : 'etunimessä';
-  const rkPattern = convertRhythmPatternToRK(pattern);
-  const preview = rkPattern.length > 12 ? `${rkPattern.slice(0, 12)}…` : rkPattern;
-  if (mode === 'analysis') {
-    return `${roleName} on rytmikuvioltaan ${preview}.`;
-  }
-  const quoted = formatSurnameQuote(name);
-  if (quoted) {
-    return `${quoted} rytmikuvio on ${preview}`;
-  }
-  return `Rytmikuvio: ${preview}`;
-}
-
-function describeLengthTrait({ metrics, entry, name, mode, role }) {
-  const fallbackLetters = (entry.display || '').replace(/[^A-Za-zÅÄÖåäöA-Za-zÀ-ÿ]/g, '').length || 0;
-  const letters = Math.round((metrics.length ?? fallbackLetters) || 0);
-  const syllableCount = Math.round(
-    metrics.syllables ?? (entry.ipa?.syllables ? splitSyllableMarkers(entry.ipa.syllables).length : 0)
-  );
-  if (!letters && !syllableCount) return '';
-  const quoted = formatSurnameQuote(name);
-  const hasName = Boolean(quoted);
-  if (mode === 'analysis') {
-    const roleName = role === 'first' ? 'Etunimi' : 'Sukunimi';
-    const partnerName = role === 'first' ? 'sukunimet' : 'etunimet';
-    if (syllableCount >= 4 || letters >= 9) {
-      return `${roleName} on pitkä, joten lyhyemmät ${partnerName}  tasapainottavat kokonaisuutta.`;
-    }
-    if (syllableCount <= 2 || letters <= 5) {
-      return `${roleName} on lyhyt, joten pidemmät ${partnerName} tasapainottavat kokonaisuutta.`;
-    }
-    return `${roleName} on keskipitkä, joten kaikenpituiset ${partnerName} sopivat.`;
-  }
-  const baseText = `${letters} kirjainta / ${syllableCount || '-'} tavua`;
-  if (syllableCount >= 4 || letters >= 9) {
-    return hasName
-      ? `Sukunimi ${quoted} on pitkä (${baseText}), joten lyhyempi etunimi voi tasapainottaa.`
-      : `Sukunimi on pitkä (${baseText}), joten lyhyempi etunimi voi tasapainottaa.`;
-  }
-  if (syllableCount <= 2 || letters <= 5) {
-    return hasName
-      ? `Sukunimi ${quoted} on lyhyt (${baseText}), joten pidempi etunimi voi tasapainottaa.`
-      : `Sukunimi on lyhyt (${baseText}), joten pitkä etunimi voi tasapainottaa.`;
-  }
-  return hasName
-    ? `Sukunimi ${quoted} on keskimitainen (${baseText}).`
-    : `Sukunimi on keskimitainen (${baseText}).`;
 }
 
 function getSurnameUsageText(entry) {
@@ -2656,18 +1191,6 @@ function parsePeriodKey(key) {
   return Number.isFinite(start) ? start : -Infinity;
 }
 
-function getGradeLabelByValue(value) {
-  if (!gradeMeta || !gradeMeta.length) return value;
-  const match = gradeMeta.find((grade) => Number(grade.value) === Number(value));
-  if (!match) return value;
-  return match.fi || value;
-}
-
-function getFeatureDescription(featureKey) {
-  const meta = phoneticMeta.get(featureKey);
-  return getFeatureDescriptionByMeta(meta);
-}
-
 function getFeatureDescriptionByMeta(meta) {
   if (!meta) return '';
   return meta.description || '';
@@ -2707,48 +1230,6 @@ function updateSurnameAnalysis(resolution = null) {
   }
   appendSurnameAnalysisLine(container, usageText, 'surname-usage');
   container.title = '';
-  renderSurnameExplainLink(dataEntry);
-}
-
-function formatComponentBreakdown(componentScores) {
-  if (!componentScores) return '';
-  const weights = getActiveWeights();
-  const labelMap = new Map(MATCH_WEIGHT_FIELDS.map((field) => [field.key, field]));
-  const orderedKeys = [...MATCH_COMPONENT_ORDER];
-  Object.keys(componentScores).forEach((key) => {
-    if (!orderedKeys.includes(key)) {
-      orderedKeys.push(key);
-    }
-  });
-  const parts = orderedKeys
-    .map((key) => {
-      const score = componentScores[key];
-      if (score == null) return null;
-      const field = labelMap.get(key);
-      const label = field ? field.label || key : key;
-      const weightValue = weights[key] ?? 0;
-      const weightPercent = Math.round(weightValue * 100);
-      return `${label}: ${score.toFixed(2)} (${weightPercent}%)`;
-    })
-    .filter(Boolean);
-  return parts.join(', ');
-}
-
-function buildFirstNameAnalysis(entry, surnameEntry) {
-  if (!entry) return null;
-  const container = document.createElement('div');
-  container.className = 'analysis-block';
-  const traitSentences = buildSurnameTraitSentences(entry, 'analysis', 'first')
-    .map((item) => item.text)
-    .filter(Boolean);
-  const analysisText = traitSentences.join(' ');
-  if (analysisText) {
-    const analysisP = document.createElement('p');
-    analysisP.className = 'analysis-text';
-    analysisP.textContent = analysisText;
-    container.appendChild(analysisP);
-  }
-  return container.childNodes.length ? container : null;
 }
 
 function createHistoryLabel(entry, t) {
@@ -2813,9 +1294,11 @@ function bindEvents() {
   });
   const surnameInput = $('#surname-input');
   if (surnameInput) {
+    surnameInput.addEventListener('focus', () => ensureSurnames(), { once: true });
     surnameInput.addEventListener('input', () => {
       const currentValue = surnameInput.value.trim();
       state.surname = currentValue;
+      if (currentValue) ensureSurnames();
       const resolution = resolveSurnameEntry(surnameMap, currentValue);
       updateSurnameAnalysis(resolution);
        updateFavoriteNavHref();
@@ -2855,11 +1338,11 @@ function bindEvents() {
     applyFilters();
   });
   const addPhoneticBtn = $('[data-action="add-phonetic"]');
-  if (addPhoneticBtn) addPhoneticBtn.addEventListener('click', addPhoneticFilter);
+  if (addPhoneticBtn) addPhoneticBtn.addEventListener('click', () => filterUi.addPhoneticFilter());
   const addGroupBtn = $('[data-action="add-group"]');
-  if (addGroupBtn) addGroupBtn.addEventListener('click', addGroupFilter);
+  if (addGroupBtn) addGroupBtn.addEventListener('click', () => filterUi.addGroupFilter());
   const addPopBtn = $('[data-action="add-popularity"]');
-  if (addPopBtn) addPopBtn.addEventListener('click', addPopularityFilter);
+  if (addPopBtn) addPopBtn.addEventListener('click', () => filterUi.addPopularityFilter());
   document.addEventListener('click', (event) => {
     const btn = event.target.closest('[data-filter-href]');
     if (!btn) return;
@@ -2900,9 +1383,9 @@ function bindEvents() {
   const loadMoreBtn = $('#load-more');
   if (loadMoreBtn) {
     loadMoreBtn.addEventListener('click', () => {
-      const totalAvailable = getDisplayableCount();
+      const totalAvailable = results.getDisplayableCount();
       state.visibleCount = Math.min(state.visibleCount + PAGE_SIZE, totalAvailable);
-      renderResults();
+      results.renderResults();
     });
   }
   document.querySelectorAll('[data-action="open-story"]').forEach((el) => {
@@ -3010,6 +1493,13 @@ async function init() {
   resetDetailAdCounter();
   applyFilters();
   scrollToResultsIfNeeded();
+  // Surname data is deferred: fetch it right away if a surname was restored
+  // (so its match appears), otherwise prefetch it once the browser is idle.
+  if (getTypedSurname()) {
+    ensureSurnames();
+  } else {
+    prefetchSurnames();
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

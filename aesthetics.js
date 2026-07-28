@@ -12,7 +12,7 @@ import {
 } from './weight-utils.js';
 
 const WORKER_PATH = './aesthetics-worker.js';
-const PAGE_SIZE = Number.POSITIVE_INFINITY;
+const PAGE_SIZE = 100;
 
 let worker = null;
 let firstIndex = null;
@@ -117,8 +117,7 @@ function applyOrdering(pairs = []) {
 }
 
 function renderResults(pairs) {
-  currentPairs = applyOrdering(pairs || currentPairs || []);
-  visiblePairs = currentPairs.length;
+  currentPairs = applyOrdering(pairs ?? currentPairs ?? []);
   const slice = currentPairs.slice(0, visiblePairs);
   const body = $('#results-body');
   if (!body) return;
@@ -143,6 +142,7 @@ function handleWorkerMessage(event) {
     setStatus(`Käsitellään nimiä… ${value}/${total}`);
   } else if (type === 'result') {
     setStatus('Valmis');
+    visiblePairs = PAGE_SIZE;
     renderResults(pairs || []);
   } else if (type === 'error') {
     setStatus(message || 'Virhe');
@@ -195,8 +195,9 @@ async function onComputeForFirst(nameParam) {
 function updateLoadMoreButtons() {
   const btn = $('#load-more-global');
   if (btn) {
-    btn.disabled = true;
-    btn.hidden = true;
+    const hasMore = visiblePairs < currentPairs.length;
+    btn.disabled = !hasMore;
+    btn.hidden = !hasMore;
   }
 }
 

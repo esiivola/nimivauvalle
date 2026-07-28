@@ -6,6 +6,7 @@ import { buildSurnameData, buildSurnameMatchContext, computeWeightedMatchScore }
 import { loadMatchingModel } from '../matching-model.js';
 import { normalizeWeightMap } from '../weight-utils.js';
 
+const SITE_ORIGIN = 'https://nimivauvalle.fi';
 const DEFAULT_POPULATION_BASE = 5600000;
 const DETAIL_T = {
   matchLabel: 'Sukunimiosuvuus',
@@ -30,6 +31,16 @@ const DETAIL_T = {
 };
 
 const normalizeKey = (value) => (value || '').trim().toLowerCase();
+
+function setCanonical(url) {
+  let canonical = document.head.querySelector('link[rel="canonical"]');
+  if (!canonical) {
+    canonical = document.createElement('link');
+    canonical.rel = 'canonical';
+    document.head.appendChild(canonical);
+  }
+  canonical.href = url;
+}
 
 function setStatus(text) {
   let status = document.getElementById('detail-status');
@@ -93,6 +104,7 @@ export async function initDetailsPage() {
     }
 
     document.title = `${entry.display || entry.name} | Nimi vauvalle`;
+    setCanonical(`${SITE_ORIGIN}/name?name=${encodeURIComponent(entry.display || entry.name)}`);
     if (titleEl) titleEl.textContent = entry.display || entry.name;
     if (subtitleEl) {
       subtitleEl.textContent = rawSurname

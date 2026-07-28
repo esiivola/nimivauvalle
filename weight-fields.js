@@ -61,8 +61,4 @@ export const MATCH_WEIGHT_FIELDS = [
   }
 ];
 
-if (typeof window !== 'undefined') {
-  window.MATCH_WEIGHT_FIELDS_DATA = MATCH_WEIGHT_FIELDS;
-}
-
 export default MATCH_WEIGHT_FIELDS;

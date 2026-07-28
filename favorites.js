@@ -18,15 +18,11 @@ import {
   resolveSurnameEntry
 } from './surname-service.js';
 import { registerAdSlots, setAdSlotsEnabled } from './ad-service.js';
-import MATCH_WEIGHT_FIELDS from './weight-fields.js';
 import {
   computeAbsoluteWeightBudget,
-  formatPercentNumber,
   normalizeWeightMap,
-  percentToWeight,
   persistSharedWeights,
-  readSharedWeights,
-  weightToPercent
+  readSharedWeights
 } from './weight-utils.js';
 import { createCardDetailLoader } from './name-detail-renderer.js';
 import { readFilterQuery, writeFilterQuery } from './state-store.js';
@@ -36,6 +32,8 @@ import {
   getSelectedGenders,
   normalizeGenderSelection
 } from './gender-filter.js';
+import { buildPeriodRanks, createSortComparator } from './sort-service.js';
+import { createWeightEditor } from './weight-editor.js';
 
 let favorites = new Set();
 let activeNames = new Set();
@@ -59,8 +57,7 @@ let surnameValue = '';
 let matchingModel = null;
 let defaultMatchWeights = {};
 let currentMatchWeights = {};
-let weightModal = null;
-let weightEditorInputs = [];
+let weightEditor = null;
 let weightPercentBudget = 1;
 const WEIGHT_SUM_TOLERANCE = 0.05;
 let genderFilterContainer = null;
@@ -118,12 +115,7 @@ async function loadData() {
   }
   weightPercentBudget = computeAbsoluteWeightBudget(currentMatchWeights) || weightPercentBudget;
   matchingModel = await loadMatchingModel();
-  periodRanks = new Map();
-  (schema.sorting || [])
-    .filter((option) => option.period)
-    .forEach((option) => {
-      periodRanks.set(option.key, option.period);
-    });
+  periodRanks = buildPeriodRanks(schema);
   detailLoader = createCardDetailLoader({
     ensureEntryDetails: (entry) => detailService.ensureEntryDetails(entry),
     groupMeta,
@@ -283,138 +275,60 @@ function updateSaveVisibility() {
   btn.hidden = pendingRemovals.size === 0;
 }
 
-function renderWeightList(prefillMap) {
-  const container = document.querySelector('#favorites-weight-list');
-  if (!container) return;
-  container.innerHTML = '';
-  weightEditorInputs = [];
-  MATCH_WEIGHT_FIELDS.forEach((meta) => {
-    const key = meta.key;
-    const row = document.createElement('div');
-    row.className = 'weight-row';
-    const header = document.createElement('div');
-    header.className = 'weight-row-header';
-
-    const legend = document.createElement('div');
-    const labelEl = document.createElement('div');
-    labelEl.className = 'weight-row-label';
-    labelEl.textContent = meta?.label || key.replace(/_/g, ' ');
-    legend.appendChild(labelEl);
-    const descEl = document.createElement('p');
-    descEl.className = 'weight-row-description';
-    descEl.textContent = meta?.description || '';
-    legend.appendChild(descEl);
-    header.appendChild(legend);
-
-    const inputWrap = document.createElement('div');
-    inputWrap.className = 'weight-row-input';
-    const inputEl = document.createElement('input');
-    inputEl.type = 'number';
-    inputEl.min = '-100';
-    inputEl.max = '100';
-    inputEl.step = '5';
-    inputEl.inputMode = 'numeric';
-    inputEl.dataset.key = key;
-    const valueString =
-      prefillMap && prefillMap.has(key)
-        ? prefillMap.get(key)
-        : formatPercentNumber(weightToPercent(currentMatchWeights[key] ?? defaultMatchWeights[key] ?? 0, weightPercentBudget));
-    inputEl.value = valueString;
-    inputEl.addEventListener('input', updateWeightStatus);
-    inputWrap.appendChild(inputEl);
-    const suffix = document.createElement('span');
-    suffix.textContent = '%';
-    inputWrap.appendChild(suffix);
-    header.appendChild(inputWrap);
-    row.appendChild(header);
-    container.appendChild(row);
-    weightEditorInputs.push({ key, input: inputEl, row });
-    const numeric = Number.parseFloat(valueString);
-    if (Number.isFinite(numeric) && numeric < 0) {
-      const note = document.createElement('p');
-      note.className = 'weight-row-note';
-      note.textContent = 'Negatiivinen paino vähentää pisteitä.';
-      row.appendChild(note);
+function initWeightEditor() {
+  const modal = document.querySelector('#favorites-weight-editor');
+  if (!modal) return;
+  weightEditor = createWeightEditor({
+    refs: {
+      modal,
+      list: document.querySelector('#favorites-weight-list'),
+      total: document.querySelector('#favorites-weight-total'),
+      remaining: document.querySelector('#favorites-weight-remaining'),
+      error: document.querySelector('#favorites-weight-error'),
+      save: document.querySelector('#favorites-weight-save')
+    },
+    tolerance: WEIGHT_SUM_TOLERANCE,
+    getWeights: () => ({ ...defaultMatchWeights, ...currentMatchWeights }),
+    getBudget: () => weightPercentBudget,
+    strings: {
+      totalText: (total) => `Yhteensä ${total.toFixed(1)}% / 100%`,
+      balanceText: (balance) =>
+        balance > 0
+          ? `${balance.toFixed(1)}% jäljellä`
+          : balance < 0
+            ? `${Math.abs(balance).toFixed(1)}% yli`
+            : 'Tasapainossa',
+      invalidText: 'Täytä jokainen kenttä.',
+      absRequirementText: 'Painojen itseisarvojen summan tulee olla 100 %.',
+      penaltyNote: 'Negatiivinen paino vähentää pisteitä.'
+    },
+    beforeOpen: () => {
+      if (!Object.keys(currentMatchWeights || {}).length) {
+        currentMatchWeights = { ...defaultMatchWeights };
+      }
+    },
+    getOpenPrefill: () => new Map(weightEditor.getInputs().map((item) => [item.key, item.input.value])),
+    onClose: () => document.body.classList.remove('modal-open'),
+    getApplyBase: () => ({ ...defaultMatchWeights }),
+    onApply: (normalized) => {
+      currentMatchWeights = normalized;
+      weightPercentBudget = computeAbsoluteWeightBudget(normalized) || 1;
+      persistSharedWeights(currentMatchWeights, defaultMatchWeights);
+      weightEditor.close();
+      renderFavorites();
     }
   });
-  updateWeightStatus();
-}
-
-function updateWeightStatus() {
-  let total = 0;
-  let hasInvalid = false;
-  weightEditorInputs.forEach((item) => {
-    const value = Number.parseFloat(item.input.value);
-    if (!Number.isFinite(value)) {
-      hasInvalid = true;
-      item.input.classList.add('invalid');
-      return;
-    }
-    item.input.classList.remove('invalid');
-    total += Math.abs(value);
-  });
-  total = Math.round(total * 10) / 10;
-  const balance = Math.round((100 - total) * 10) / 10;
-  const totalEl = document.querySelector('#favorites-weight-total');
-  const remainingEl = document.querySelector('#favorites-weight-remaining');
-  const errEl = document.querySelector('#favorites-weight-error');
-  if (totalEl) totalEl.textContent = `Yhteensä ${total.toFixed(1)}% / 100%`;
-  if (remainingEl) {
-    remainingEl.textContent =
-      balance > 0 ? `${balance.toFixed(1)}% jäljellä` : balance < 0 ? `${Math.abs(balance).toFixed(1)}% yli` : 'Tasapainossa';
-  }
-  let error = '';
-  const needsAdjustment = Math.abs(balance) > WEIGHT_SUM_TOLERANCE;
-  if (hasInvalid) {
-    error = 'Täytä jokainen kenttä.';
-  } else if (needsAdjustment) {
-    error = 'Painojen itseisarvojen summan tulee olla 100 %.';
-  }
-  if (errEl) errEl.textContent = error;
-  const saveBtn = document.querySelector('#favorites-weight-save');
-  if (saveBtn) saveBtn.disabled = hasInvalid || needsAdjustment;
-}
-
-function openWeightModal() {
-  weightModal = document.querySelector('#favorites-weight-editor');
-  if (!weightModal) return;
-  // ensure we have a usable base set before rendering
-  if (!Object.keys(currentMatchWeights || {}).length) {
+  document.querySelector('#favorites-open-weight')?.addEventListener('click', () => weightEditor.open());
+  document.querySelectorAll('[data-action="dismiss-fav-weight"]').forEach((el) =>
+    el.addEventListener('click', () => weightEditor.close())
+  );
+  document.querySelector('#favorites-weight-save')?.addEventListener('click', () => weightEditor.applyChanges());
+  document.querySelector('[data-action="favorites-reset-weight"]')?.addEventListener('click', () => {
+    weightPercentBudget = computeAbsoluteWeightBudget(defaultMatchWeights);
     currentMatchWeights = { ...defaultMatchWeights };
-  }
-  const prefill = new Map(weightEditorInputs.map((item) => [item.key, item.input.value]));
-  renderWeightList(prefill);
-  weightModal.hidden = false;
-  document.body.classList.add('modal-open');
-}
-
-function closeWeightModal() {
-  if (!weightModal) return;
-  weightModal.hidden = true;
-  document.body.classList.remove('modal-open');
-}
-
-function saveWeights() {
-  if (!weightModal) return;
-  const updated = { ...defaultMatchWeights };
-  weightEditorInputs.forEach((item) => {
-    const value = Number.parseFloat(item.input.value);
-    if (!Number.isFinite(value)) return;
-    updated[item.key] = percentToWeight(value, weightPercentBudget);
+    weightEditor.render();
   });
-  const normalized = normalizeWeightMap(updated);
-  currentMatchWeights = normalized;
-  weightPercentBudget = computeAbsoluteWeightBudget(normalized) || 1;
-  persistSharedWeights(currentMatchWeights, defaultMatchWeights);
-  closeWeightModal();
-  renderFavorites();
-}
-
-function resetWeights() {
-  weightPercentBudget = computeAbsoluteWeightBudget(defaultMatchWeights);
-  currentMatchWeights = { ...defaultMatchWeights };
-  renderWeightList();
-  updateWeightStatus();
+  document.querySelector('#favorites-weight-editor .modal-backdrop')?.addEventListener('click', () => weightEditor.close());
 }
 
 function saveChanges() {
@@ -582,59 +496,8 @@ function sortEntries(entries) {
   const useMatch = Boolean(surnameValue && surnameValue.trim()) && sortKey === 'match';
   const activeSortKey = useMatch ? 'match' : sortKey === 'match' ? 'popularity' : sortKey;
   const copy = [...entries];
-  copy.sort((a, b) => {
-    const aVal = getSortValue(a);
-    const bVal = getSortValue(b);
-    if (aVal === bVal) {
-      return (a.display || a.name || '').localeCompare(b.display || b.name || '', 'fi');
-    }
-    return aVal > bVal ? dir : -dir;
-  });
+  copy.sort(createSortComparator({ activeSortKey, dir, periodRanks, metricKeys }));
   return copy;
-
-  function getSortValue(entry) {
-    if (activeSortKey === 'alpha') {
-      return entry.display || entry.name || '';
-    }
-    if (activeSortKey === 'popularity') {
-      return entry.popularity?.total ?? 0;
-    }
-    if (activeSortKey === 'match') {
-      return entry._match ?? 0;
-    }
-    if (periodRanks.has(activeSortKey)) {
-      const period = periodRanks.get(activeSortKey);
-      const countValue = getPeriodCountValue(entry, period);
-      if (countValue != null) {
-        return countValue;
-      }
-      return getPeriodRankValue(entry, period);
-    }
-    if (metricKeys.has(activeSortKey)) {
-      return entry.metrics?.[activeSortKey] ?? 0;
-    }
-    if (activeSortKey.endsWith('_intensity')) {
-      const base = activeSortKey.replace('_intensity', '');
-      return entry.phonetic?.[base]?.intensity ?? 0;
-    }
-    return 0;
-  }
-}
-
-function getPeriodRankValue(entry, period) {
-  const ranks = entry.historyRanks;
-  if (!ranks) return 0;
-  const value = ranks[period];
-  if (!Number.isFinite(value) || value <= 0) return 0;
-  return -value;
-}
-
-function getPeriodCountValue(entry, period) {
-  const countsMap = entry.historyCounts;
-  if (!countsMap) return null;
-  const value = countsMap[period];
-  if (value == null || Number.isNaN(value)) return null;
-  return Number(value);
 }
 
 function bindActions() {
@@ -651,13 +514,7 @@ function bindActions() {
     persistSurnameToFilterQuery();
     renderFavorites();
   });
-  document.querySelector('#favorites-open-weight')?.addEventListener('click', openWeightModal);
-  document.querySelectorAll('[data-action="dismiss-fav-weight"]').forEach((el) =>
-    el.addEventListener('click', closeWeightModal)
-  );
-  document.querySelector('#favorites-weight-save')?.addEventListener('click', saveWeights);
-  document.querySelector('[data-action="favorites-reset-weight"]')?.addEventListener('click', resetWeights);
-  document.querySelector('#favorites-weight-editor .modal-backdrop')?.addEventListener('click', closeWeightModal);
+  initWeightEditor();
 }
 
 async function init() {
@@ -686,9 +543,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fallback: ensure weight editor opens even if earlier binding fails
   document.addEventListener('click', (event) => {
     const trigger = event.target.closest('#favorites-open-weight');
-    if (trigger) {
+    if (trigger && weightEditor) {
       event.preventDefault();
-      openWeightModal();
+      weightEditor.open();
     }
   });
 });

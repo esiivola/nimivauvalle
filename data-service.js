@@ -46,4 +46,13 @@ export async function loadDataset(options = {}) {
   };
 }
 
+// Load just the surname dataset (last-names.json). Used to fetch it on demand
+// rather than as part of the initial loadDataset() call.
+export async function loadSurnames(path = DEFAULT_PATHS.lastNames) {
+  const response = await fetch(resolvePath(path));
+  assertResponseOk(response, 'last names');
+  const payload = await response.json();
+  return payload.names || [];
+}
+
 export { DEFAULT_PATHS as DEFAULT_DATA_PATHS };

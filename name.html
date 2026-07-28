@@ -15,7 +15,7 @@
       name="description"
       content="Yksittäisen etunimen tiedot: yleisyys, ikäjakauma, nimipäivä, ääntäminen ja suosion historia."
     />
-    <meta name="robots" content="index, follow" />
+    <meta name="robots" content="noindex, follow" />
     <link rel="canonical" href="https://nimivauvalle.fi/name" />
     <meta property="og:site_name" content="Nimi vauvalle" />
     <meta property="og:locale" content="fi_FI" />
@@ -24,6 +24,10 @@
     <meta property="og:description" content="Yksittäisen etunimen tiedot: yleisyys, ikäjakauma, nimipäivä, ääntäminen ja suosion historia." />
     <meta property="og:url" content="https://nimivauvalle.fi/name" />
     <meta property="og:image" content="https://nimivauvalle.fi/assets/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:alt" content="Nimi vauvalle" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Etunimen tiedot | Nimi vauvalle" />
     <meta name="twitter:description" content="Yksittäisen etunimen tiedot: yleisyys, ikäjakauma, nimipäivä, ääntäminen ja suosion historia." />
@@ -36,11 +40,10 @@
     />
     <!-- Silktide Consent Manager -->
     <link rel="stylesheet" id="silktide-consent-manager-css" href="/cookie-banner/silktide-consent-manager.css" />
-    <script src="/cookie-banner/silktide-consent-manager.js"></script>
+    <script src="/cookie-banner/silktide-consent-manager.js" defer></script>
     <link rel="stylesheet" href="/cookie-banner/consent-overrides.css" />
-    <script src="/cookie-banner/consent-config.js"></script>
+    <script src="/cookie-banner/consent-config.js" defer></script>
     <link rel="stylesheet" href="/styles.css" />
-    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
   </head>
   <body data-nav-label="Etusivulle" data-nav-href="/">
     <!-- Google Tag Manager (noscript) -->
@@ -70,9 +73,9 @@
     </main>
     <div data-include="/footer.html"></div>
     <script type="module">
-      import { initPageChrome } from '/site.js';
+      import { initPageChrome } from './site.js';
       initPageChrome();
     </script>
-    <script type="module" src="/name.js"></script>
+    <script type="module" src="./name.js"></script>
   </body>
 </html>
