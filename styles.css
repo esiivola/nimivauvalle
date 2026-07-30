@@ -12,6 +12,12 @@
   --muted: #6f7486;
   --chip-bg: #f3f1fb;
   --danger: #d33f49;
+  /* Darker coral for accent-colored TEXT (links, eyebrows). Meets WCAG AA
+     (4.9:1 on white); --accent stays the light coral used for fills/buttons. */
+  --accent-text: #c14a3d;
+  /* Favorite heart icons (drawn via CSS mask so all call sites share one shape). */
+  --heart-outline: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'/%3E%3C/svg%3E");
+  --heart-filled: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z' fill='black'/%3E%3C/svg%3E");
   --title-font: "Mea Culpa", cursive;
   --body-font: "Quicksand", "Helvetica Neue", Arial, sans-serif;
   --radius: 0.75rem;
@@ -119,8 +125,8 @@ section[data-include="content/blog-strip.html"] {
 .eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.16em;
-  font-size: 0.75rem;
-  color: var(--accent);
+  font-size: 0.8rem;
+  color: var(--accent-text);
   margin: 0;
 }
 
@@ -155,7 +161,7 @@ section[data-include="content/blog-strip.html"] {
 }
 
 a.link-button {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
   font-size: 0.9rem;
   text-decoration: underline;
@@ -205,7 +211,7 @@ a.link-button:hover {
 
 .detail-ad {
   margin: 0.25rem 0.35rem;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .ad-rail {
@@ -269,7 +275,7 @@ a.link-button:hover {
 }
 
 .content-block a:not(.article-card):not(.link-button) {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: underline;
   font-weight: 600;
 }
@@ -279,7 +285,7 @@ a.link-button:hover {
 }
 
 a.article-cta.inline {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: underline;
   font-weight: 600;
 }
@@ -292,7 +298,7 @@ a.article-cta.inline:hover {
   align-self: center;
   text-decoration: underline;
   text-underline-offset: 0.18em;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
   background: none;
   border: 0;
@@ -459,7 +465,7 @@ a.article-cta.inline:hover {
 .article-card h3 {
   grid-area: title;
   margin: 0 0 0.2rem 0;
-  font-size: 1.05rem;
+  font-size: 1.1rem;
 }
 
 .article-card p:first-of-type {
@@ -469,7 +475,7 @@ a.article-cta.inline:hover {
 
 .article-card p {
   margin: 0.1rem 0 0;
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   color: var(--muted);
 }
 
@@ -541,6 +547,23 @@ a.article-cta.inline:hover {
   margin-top: 0.75rem;
 }
 
+/* Guides cards wrap a title + description in the summary; align the disclosure
+   arrow with the title line rather than the middle of the two-line block.
+   (!important overrides the shared summary rule, whose :is() list includes IDs
+   and therefore carries ID-level specificity.) */
+.content-block.collapsible > summary {
+  align-items: flex-start !important;
+}
+
+.content-block.collapsible > summary > div > h2 {
+  margin-top: 0;
+}
+
+.content-block.collapsible > summary::before {
+  align-self: flex-start !important;
+  margin-top: 0.35rem;
+}
+
 /* Shared summary styling */
 :is(.summary-toggle, .collapsible, #articles-strip-panel, #extra-filter-panel, .filter-like) > summary {
   cursor: pointer;
@@ -574,7 +597,7 @@ a.article-cta.inline:hover {
   height: 20px;
   color: var(--text);
   font-weight: 700;
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   line-height: 1;
   background: transparent;
 }
@@ -1097,7 +1120,7 @@ button:not(:disabled):hover {
 }
 
 .tri-toggle[data-state="include"] {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--accent-muted);
 }
 
@@ -1177,7 +1200,7 @@ button:not(:disabled):hover {
   min-height: 2.2rem;
   margin-top: 0.35rem;
   line-height: 1.45;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   color: var(--text);
 }
 
@@ -1203,7 +1226,7 @@ button:not(:disabled):hover {
 }
 
 .filter-summary {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   color: var(--muted);
   margin-top: 0.25rem;
 }
@@ -1319,9 +1342,10 @@ button:not(:disabled):hover {
   opacity: 0.6;
 }
 
-.marked-remove .favorite-btn {
-  --favorite-outline: var(--muted);
-  color: var(--muted);
+.marked-remove .favorite-btn::before {
+  background-color: var(--danger);
+  -webkit-mask-image: var(--heart-filled);
+  mask-image: var(--heart-filled);
 }
 
 .name-card {
@@ -1368,25 +1392,34 @@ button:not(:disabled):hover {
 }
 
 .favorite-btn {
-  --favorite-outline: #d1c7ff;
+  --favorite-outline: #847ab5;
   margin-left: auto;
   border: none;
   background: none;
-  font-size: 1.2rem;
-  line-height: 1;
+  padding: 0.3rem;
+  line-height: 0;
+  font-size: 0; /* hide the ♥ text node; the heart is drawn via mask below */
   cursor: pointer;
-  color: var(--favorite-outline);
+  color: transparent;
+  -webkit-tap-highlight-color: transparent;
 }
 
-@supports (-webkit-text-stroke: 1px #000) {
-  .favorite-btn:not(.active) {
-    color: transparent;
-    -webkit-text-stroke: 1.3px var(--favorite-outline);
-  }
+/* Fuller, larger heart rendered from an SVG mask so its colour is fully
+   controllable and legible (outline = not saved, filled coral = saved). */
+.favorite-btn::before {
+  content: "";
+  display: block;
+  width: 26px;
+  height: 26px;
+  background-color: var(--favorite-outline);
+  -webkit-mask: var(--heart-outline) center / contain no-repeat;
+  mask: var(--heart-outline) center / contain no-repeat;
 }
 
-.favorite-btn.active {
-  color: var(--accent);
+.favorite-btn.active::before {
+  background-color: var(--accent);
+  -webkit-mask-image: var(--heart-filled);
+  mask-image: var(--heart-filled);
 }
 
 .favorite-btn:focus {
@@ -1466,6 +1499,10 @@ button:not(:disabled):hover {
   align-self: flex-end;
 }
 
+.share-actions[hidden] {
+  display: none;
+}
+
 #share-favorites {
   background: #fff;
 }
@@ -1521,7 +1558,7 @@ button:not(:disabled):hover {
   height: 20px;
   color: var(--text);
   font-weight: 700;
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   line-height: 1;
   background: transparent;
 }
@@ -1668,7 +1705,7 @@ button:not(:disabled):hover {
 .phonetic-list li {
   display: flex;
   justify-content: space-between;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .chip-list {
@@ -1725,7 +1762,7 @@ button:not(:disabled):hover {
   display: inline-block;
   min-width: auto;
   padding: 0.15rem 0;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   line-height: 1.4;
 }
 
@@ -1733,7 +1770,7 @@ button:not(:disabled):hover {
   padding: 1rem;
   border-bottom: 1px solid var(--border);
   color: var(--text);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .wiki-summary strong {
@@ -1872,7 +1909,7 @@ button:not(:disabled):hover {
 .description {
   padding: 0 1rem 1rem;
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .affiliate-link {
@@ -1892,7 +1929,7 @@ button:not(:disabled):hover {
 
 .affiliate-link::after {
   content: "→";
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 body.modal-open {
@@ -1984,7 +2021,7 @@ button.icon-button {
   flex: 0 0 40px;
   border: 1px solid var(--border);
   background: #fff;
-  font-size: 1.3rem;
+  font-size: 1.2rem;
   color: var(--muted);
   display: inline-flex;
   align-items: center;
@@ -2056,7 +2093,7 @@ button.icon-button {
 }
 
 .weight-row-note strong {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .analysis-block {
@@ -2158,7 +2195,7 @@ td {
   text-align: left;
   padding: 0.5rem 0.6rem;
   border-bottom: 1px solid var(--border);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 th {
@@ -2175,7 +2212,7 @@ th {
   flex-wrap: wrap;
   gap: 0.75rem;
   justify-content: space-between;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .footer-links {
@@ -2238,7 +2275,7 @@ th {
 .post-header h2 {
   margin: 0.05rem 0 0;
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 600;
 }
 

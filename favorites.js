@@ -175,6 +175,8 @@ function renderFavorites() {
   setAdSlotsEnabled('favorites', activeNames.size > 0);
   list.innerHTML = '';
   const hasFavorites = activeNames.size > 0;
+  const shareActions = document.querySelector('.share-actions');
+  if (shareActions) shareActions.hidden = !hasFavorites;
   if (!hasFavorites) {
     const shareInput = document.querySelector('#share-url');
     if (shareInput) shareInput.value = '';
