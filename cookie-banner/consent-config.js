@@ -33,6 +33,32 @@
           gtag('consent', 'update', { analytics_storage: 'denied' });
         },
       },
+      {
+        id: 'advertising',
+        name: 'Mainokset',
+        description:
+          '<p>Nämä evästeet mahdollistavat mainosten näyttämisen ja kohdentamisen sivuston ylläpidon kulujen kattamiseksi. Mainoksia näytetään vain suostumuksellasi.</p>',
+        defaultValue: false,
+        onAccept: function () {
+          gtag('consent', 'update', {
+            ad_storage: 'granted',
+            ad_personalization: 'granted',
+            ad_user_data: 'granted',
+          });
+          dataLayer.push({ event: 'consent_accepted_advertising' });
+          window.__nvAdsConsentGranted = true;
+          if (typeof window.__nvAdsConsent === 'function') window.__nvAdsConsent(true);
+        },
+        onReject: function () {
+          gtag('consent', 'update', {
+            ad_storage: 'denied',
+            ad_personalization: 'denied',
+            ad_user_data: 'denied',
+          });
+          window.__nvAdsConsentGranted = false;
+          if (typeof window.__nvAdsConsent === 'function') window.__nvAdsConsent(false);
+        },
+      },
     ],
     text: {
       banner: {
