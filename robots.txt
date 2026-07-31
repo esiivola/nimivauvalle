@@ -25,3 +25,4 @@ User-agent: ClaudeBot
 Allow: /
 
 Sitemap: https://nimivauvalle.fi/sitemap.xml
+Sitemap: https://nimivauvalle.fi/sitemap-nimet.xml

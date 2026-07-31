@@ -34,9 +34,8 @@
     <meta name="twitter:title" content="Tietoa palvelusta | Nimi vauvalle" />
     <meta name="twitter:description" content="Miten Nimi vauvalle laskee nimien sopivuuden, mistä data tulee ja milloin sivusto on päivitetty." />
     <meta name="twitter:image" content="https://nimivauvalle.fi/assets/og-image.png" />
-    <!-- Google AdSense: site verification + loader (ad units render only after ad consent) -->
+    <!-- Google AdSense site verification (no ad loader: this page has no ad slots / consent manager) -->
     <meta name="google-adsense-account" content="ca-pub-2294859495292133" />
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2294859495292133" crossorigin="anonymous"></script>
   </head>
 <body data-nav-label="Etusivulle" data-nav-href="/">
     <main class="layout">
@@ -52,14 +51,59 @@
           </p>
         </div>
       </header>
-      <section data-include="content/about-section.html">
-        <p class="hint">Ladataan sisältöä…</p>
-      </section>
-      <section data-include="content/quality-section.html">
-        <p class="hint">Ladataan laatukäytännöt…</p>
-      </section>
+      <section data-include="content/about-section.html"><!--inl--><section class="content-block">
+  <h2>Data, algoritmit ja viimeisin päivitys</h2>
+  <p>
+    Nimi vauvalle yhdistää DVV:n nimiaineistot, väestöarviot, Wikipedia-tiivistelmät ja oman
+    fonetiikkapohjaisen tekoälymallimme. Tekoälymalli arvioi miten hyvin etunimi sopii annettuun sukunimeen. Haku tapahtuu selaimessasi ja syötetty sukunimi ei tallennu palvelimelle.
+  </p>
+  <div class="content-grid">
+    <article class="content-card">
+      <h3>Äännesopivuus ja painotukset</h3>
+      <p>
+        Fonetiikkamalli jakaa nimet vokaalien, konsonanttien, painotusten ja rytmin perusteella ryhmiin. Voit säätää
+        painoja (positiivisia tai negatiivisia) ja näet, miten se muuttaa suosituksia.
+      </p>
+    </article>
+    <article class="content-card">
+      <h3>Käytön historia ja väestöarviot</h3>
+      <p>
+        Näytämme arvioidun henkilömäärän. Etu- ja sukunimien yhdistelmästä kerromme, kuinka
+        monta täyskaimaa arviolta on Suomessa.
+      </p>
+    </article>
+    <article class="content-card">
+      <h3>Viimeisin päivitys ja laatu</h3>
+      <p>
+        Datalähteet päivitettiin 01/2025. Wikipedia-tiivistelmät haetaan reaaliajassa.
+      </p>
+    </article>
+  </div>
+</section><!--/inl--></section>
+      <section data-include="content/quality-section.html"><!--inl--><section class="content-block">
+  <h2>Selkeät käytännöt käyttäjille, hakukoneille ja mainostajille</h2>
+  <p>
+    Sivuston eettiset periaatteet:
+  </p>
+  <ul class="tag-list">
+    <li>Selkeä käyttöliittymä</li>
+    <li>Läpinäkyvät ja muokattavat evästeet</li>
+    <li>Paikallinen laskenta: sukunimeä ei lähetetä palvelimelle</li>
+    <li>Säännölliset datapäivitykset (viimeisin 01/2025) ja datan manuaalitarkistukset</li>
+  </ul>
+</section><!--/inl--></section>
     </main>
-    <div data-include="footer.html"></div>
+    <div data-include="footer.html"><!--inl--><footer class="site-footer">
+  <div>© 2026 Nimi vauvalle</div>
+  <div class="footer-links">
+    <a href="/nimi/">Suositut nimet</a>
+    <a href="/artikkelit/">Artikkelit</a>
+    <a href="/about.html">Tietoa palvelusta</a>
+    <a href="/privacy.html">Yksityisyys</a>
+    <a href="/terms.html">Käyttöehdot</a>
+    <a href="mailto:nimivauvalle@gmail.com">Ota yhteyttä</a>
+  </div>
+</footer><!--/inl--></div>
     <script type="module">
       import { initPageChrome } from './site.js';
       initPageChrome();

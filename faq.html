@@ -66,9 +66,8 @@
     <meta name="twitter:title" content="Usein kysyttyä | Nimi vauvalle" />
     <meta name="twitter:description" content="Tietosuoja, pistelasku ja mainoskäytännöt Nimi vauvalle -palvelussa. Lue vastaukset yleisimpiin kysymyksiin." />
     <meta name="twitter:image" content="https://nimivauvalle.fi/assets/og-image.png" />
-    <!-- Google AdSense: site verification + loader (ad units render only after ad consent) -->
+    <!-- Google AdSense site verification (no ad loader: this page has no ad slots / consent manager) -->
     <meta name="google-adsense-account" content="ca-pub-2294859495292133" />
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2294859495292133" crossorigin="anonymous"></script>
   </head>
 <body data-nav-label="Etusivulle" data-nav-href="/">
     <main class="layout">
@@ -82,11 +81,58 @@
           <p class="hero-subtitle">Tietosuoja, pistelasku, mainosnäytöt ja jakaminen yhdessä paikassa.</p>
         </div>
       </header>
-      <section data-include="content/faq-section.html">
-        <p class="hint">Ladataan vastauksia…</p>
-      </section>
+      <section data-include="content/faq-section.html"><!--inl--><section class="content-block">
+  <h2>FAQ: tietosuoja, pisteet ja mainokset</h2>
+  <dl class="faq-list">
+    <div class="faq-item">
+      <dt>Mitä tietoja tallennetaan?</dt>
+      <dd>
+        Sukunimiä ei tallenneta palvelimelle. Evästeet keräävät vain välttämättömät istuntotiedot. Analytiikka- ja
+        mainosevästeet aktivoituvat vasta suostumuksellasi.
+      </dd>
+    </div>
+    <div class="faq-item">
+      <dt>Miten pistelasku toimii?</dt>
+      <dd>
+        Pistelasku yhdistää fonetiikan (vokaali- ja konsonanttiprofiilit, rytmi, painotus), yleisyyden ja valitsemasi
+        painotukset. Negatiiviset painotukset vähentävät pisteitä, jos piirre on vahva.
+      </dd>
+    </div>
+    <div class="faq-item">
+      <dt>Miksi näen mainoksia?</dt>
+      <dd>
+        Mainoksia näytetään vain sisältörikkailla näkymillä kulujen kattamiseksi. Tyhjillä ruuduilla tai latausvirheissä
+        mainospaikat pysyvät piilossa AdSense-politiikan mukaisesti.
+      </dd>
+    </div>
+    <div class="faq-item">
+      <dt>Voinko jakaa hakuni?</dt>
+      <dd>
+        Kyllä. Suodattimet tallentuvat URL-osoitteeseen, ja suosikit voi jakaa suoraan linkkinä. Henkilötietoja ei
+        sisälly linkkeihin.
+      </dd>
+    </div>
+    <div class="faq-item">
+      <dt>Keneen otan yhteyttä?</dt>
+      <dd>
+        Ylläpitäjä: <a class="ghost link-button" href="mailto:nimivauvalle@gmail.com">nimivauvalle@gmail.com</a>.
+        Palaute on tervetullutta, jotta haku ja pisteytys paranevat.
+      </dd>
+    </div>
+  </dl>
+</section><!--/inl--></section>
     </main>
-    <div data-include="footer.html"></div>
+    <div data-include="footer.html"><!--inl--><footer class="site-footer">
+  <div>© 2026 Nimi vauvalle</div>
+  <div class="footer-links">
+    <a href="/nimi/">Suositut nimet</a>
+    <a href="/artikkelit/">Artikkelit</a>
+    <a href="/about.html">Tietoa palvelusta</a>
+    <a href="/privacy.html">Yksityisyys</a>
+    <a href="/terms.html">Käyttöehdot</a>
+    <a href="mailto:nimivauvalle@gmail.com">Ota yhteyttä</a>
+  </div>
+</footer><!--/inl--></div>
     <script type="module">
       import { initPageChrome } from './site.js';
       initPageChrome();

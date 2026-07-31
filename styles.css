@@ -2526,6 +2526,34 @@ th {
     display: none;
   }
 }
+/* Browsable name index (prerendered /nimi/ pages) */
+.name-index-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.1rem 1.25rem;
+}
+
+.name-index-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.name-index-list a {
+  color: var(--accent-text);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.name-index-list a:hover {
+  text-decoration: underline;
+}
+
 /* Accessible text that must remain available to assistive technology without
    changing the visual layout. */
 .visually-hidden {
